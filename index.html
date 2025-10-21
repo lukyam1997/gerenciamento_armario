@@ -2614,6 +2614,7 @@
                 elementos.armarioForm.dataset.modo = 'cadastro';
                 elementos.armarioForm.dataset.id = armario.id;
                 elementos.armarioForm.dataset.tipo = armario.tipo;
+                elementos.armarioForm.dataset.numero = armario.numero;
                 elementos.armarioModal.style.display = 'flex';
             } else {
                 const termoHtml = armario.tipo === 'acompanhante'
@@ -2824,8 +2825,10 @@
         async function salvarArmario() {
             const id = parseInt(elementos.armarioForm.dataset.id);
             const tipo = elementos.armarioForm.dataset.tipo || 'visitante';
+            const numeroArmario = elementos.armarioForm.dataset.numero || '';
             const dados = {
                 id: id,
+                numero: numeroArmario,
                 nomeVisitante: document.getElementById('nome-visitante').value.trim(),
                 nomePaciente: document.getElementById('nome-paciente').value.trim(),
                 leito: document.getElementById('leito').value.trim(),
