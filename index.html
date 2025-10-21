@@ -2232,12 +2232,7 @@
                 const card = document.createElement('div');
                 card.className = `armario-card ${armario.status}`;
                 card.dataset.id = armario.id;
-                let detailsHTML = `
-                    <p class="armario-unidade">
-                        <span class="label">Unidade</span>
-                        <span class="value">${armario.unidade || '-'}</span>
-                    </p>
-                `;
+                let detailsHTML = '';
                 if (armario.status === 'livre') {
                     detailsHTML += '<p>Disponível para uso</p>';
                 } else {
