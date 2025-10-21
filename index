@@ -1,0 +1,3435 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Armários Hospitalares</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --primary-color: #2c6e8f;
+            --secondary-color: #4a9abf;
+            --light-color: #e8f4fc;
+            --dark-color: #1a4a63;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --text-color: #333;
+            --bg-color: #f5f9fc;
+            --sidebar-width: 250px;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            min-height: 100vh;
+        }
+        /* Textura de cédula */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle at 25% 25%, rgba(255,255,255,0.2) 2px, transparent 2px),
+                radial-gradient(circle at 75% 75%, rgba(255,255,255,0.15) 1px, transparent 1px);
+            background-size: 50px 50px, 30px 30px;
+            pointer-events: none;
+            z-index: -1;
+        }
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--primary-color);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        .sidebar-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-header h2 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+        .sidebar-header p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        .sidebar-menu {
+            padding: 15px 0;
+        }
+        .sidebar-menu ul {
+            list-style: none;
+        }
+        .sidebar-menu li {
+            padding: 0;
+        }
+        .sidebar-menu a {
+            display: block;
+            padding: 12px 20px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        .sidebar-menu a:hover {
+            background-color: rgba(255,255,255,0.1);
+            border-left-color: var(--light-color);
+        }
+        .sidebar-menu a.active {
+            background-color: rgba(255,255,255,0.15);
+            border-left-color: var(--light-color);
+        }
+        .sidebar-menu i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        .header-title h1 {
+            font-size: 1.8rem;
+            color: var(--dark-color);
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-selectors {
+            display: flex;
+            align-items: flex-end;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .selector-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .selector-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .selector-group select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: white;
+            min-width: 160px;
+        }
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--dark-color);
+        }
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--danger-color);
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* SweetAlert custom form layout */
+        .swal-form-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            text-align: left;
+        }
+        .swal-form-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+        .swal-form-section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--dark-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .swal-form-section-title i {
+            color: var(--primary-color);
+        }
+        .swal-form-fields {
+            display: grid;
+            gap: 12px;
+        }
+        .swal-form-fields.two-columns {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+        .swal-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .swal-form-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .swal-form-hint {
+            font-size: 0.75rem;
+            color: #555;
+            background: var(--light-color);
+            border-radius: 6px;
+            padding: 8px 10px;
+            line-height: 1.4;
+        }
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--secondary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        /* Cards Hero */
+        .cards-hero {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            transition: transform 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card.livre {
+            border-top: 4px solid var(--success-color);
+        }
+        .card.em-uso {
+            border-top: 4px solid var(--secondary-color);
+        }
+        .card.proximo {
+            border-top: 4px solid var(--warning-color);
+        }
+        .card.vencido {
+            border-top: 4px solid var(--danger-color);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .card-icon {
+            font-size: 1.5rem;
+            opacity: 0.7;
+        }
+        .card-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .card-description {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        /* Filtros */
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background-color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .filter-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        /* Tabela de Armários */
+        .armarios-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .armario-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 15px;
+            transition: all 0.3s;
+            cursor: pointer;
+            border-left: 4px solid var(--success-color);
+        }
+        .armario-card.em-uso {
+            border-left-color: var(--secondary-color);
+        }
+        .armario-card.proximo {
+            border-left-color: var(--warning-color);
+        }
+        .armario-card.vencido {
+            border-left-color: var(--danger-color);
+        }
+        .armario-card:hover {
+            box-shadow: 0 6px 10px rgba(0,0,0,0.15);
+        }
+        .armario-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .armario-number {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--dark-color);
+        }
+        .armario-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .status-livre {
+            background-color: rgba(40, 167, 69, 0.1);
+            color: var(--success-color);
+        }
+        .status-em-uso {
+            background-color: rgba(74, 154, 191, 0.1);
+            color: var(--secondary-color);
+        }
+        .status-proximo {
+            background-color: rgba(255, 193, 7, 0.1);
+            color: var(--warning-color);
+        }
+        .status-vencido {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+        }
+        .armario-details {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .armario-details p {
+            margin-bottom: 5px;
+        }
+        .armario-unidade {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            background-color: rgba(74, 154, 191, 0.12);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 12px;
+        }
+        .armario-unidade .label {
+            color: var(--dark-color);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 0.75rem;
+            display: block;
+        }
+        .armario-unidade .value {
+            display: block;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+            margin-top: 2px;
+        }
+        /* Tabelas de dados */
+        .data-table {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .table-header {
+            padding: 15px 20px;
+            background-color: var(--light-color);
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background-color: var(--light-color);
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .btn-edit {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        .btn-delete {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+        }
+        .modal-body {
+            padding: 20px;
+        }
+        .modal-large .modal-content {
+            max-width: 960px;
+        }
+        .modal-full {
+            align-items: stretch;
+            padding: 30px 10px;
+        }
+        .modal-full .modal-content {
+            width: 100%;
+            max-width: 1100px;
+            height: 100%;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-scrollable {
+            overflow-y: auto;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 16px 20px;
+            border-top: 1px solid #eef2f7;
+            background: #fbfdff;
+        }
+        .modal-actions .btn-primary {
+            min-width: 140px;
+        }
+        /* Termo Wizard */
+        .wizard-card {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+            border: 1px solid #eef2f7;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .wizard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #eef2f7;
+            background: linear-gradient(180deg,#fff,#f7faff);
+        }
+        .wizard-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--dark-color);
+        }
+        .wizard-subtitle {
+            font-size: 0.9rem;
+            color: #5b6b86;
+            margin-top: 4px;
+        }
+        .wizard-progress {
+            min-width: 260px;
+        }
+        .wizard-progress-bar {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            background: #e9eef6;
+            overflow: hidden;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .wizard-progress-bar span {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg,var(--primary-color),#5ea1ff);
+            transition: width 0.4s ease;
+        }
+        .wizard-progress-label {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #5b6b86;
+            margin-top: 6px;
+        }
+        .wizard-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            background: #f7fafc;
+        }
+        .wizard-step {
+            display: none;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .wizard-step.active {
+            display: block;
+            opacity: 1;
+            transform: none;
+        }
+        .wizard-grid {
+            display: grid;
+            gap: 16px;
+            grid-template-columns: repeat(12, 1fr);
+        }
+        .wizard-col-12 { grid-column: span 12; }
+        .wizard-col-8 { grid-column: span 8; }
+        .wizard-col-6 { grid-column: span 6; }
+        .wizard-col-4 { grid-column: span 4; }
+        @media (max-width: 900px) {
+            .wizard-progress { min-width: 200px; }
+            .wizard-col-8,
+            .wizard-col-6,
+            .wizard-col-4 { grid-column: span 12; }
+        }
+        .wizard-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .wizard-field label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .wizard-required::after {
+            content: ' *';
+            color: var(--danger-color);
+        }
+        .wizard-input,
+        .wizard-textarea,
+        .wizard-select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #dde6f2;
+            background: #fff;
+            font: inherit;
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .wizard-textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+        .wizard-input:focus,
+        .wizard-textarea:focus,
+        .wizard-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(13,110,253,0.2);
+        }
+        .wizard-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #f0f6ff;
+            color: #0a3a88;
+            border: 1px solid #cfe0ff;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .wizard-inline {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .wizard-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid #dbe8ff;
+            background: #f8fbff;
+            font-size: 0.9rem;
+        }
+        .wizard-chip input {
+            transform: scale(1.1);
+        }
+        .wizard-hint {
+            font-size: 0.8rem;
+            color: #5b6b86;
+        }
+        .wizard-volumes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .wizard-volume-item {
+            border: 1px dashed #cfe0ff;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fbfdff;
+        }
+        .wizard-volume-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: minmax(100px, 150px) 1fr auto;
+            align-items: flex-end;
+        }
+        .wizard-volume-col {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .wizard-volume-col label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #5b6b86;
+        }
+        .wizard-volume-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-end;
+        }
+        .wizard-volume-actions .btn {
+            padding: 10px 14px;
+            border-radius: 10px;
+        }
+        .wizard-error {
+            font-size: 0.8rem;
+            color: var(--danger-color);
+            display: none;
+        }
+        .wizard-field.invalid .wizard-error {
+            display: block;
+        }
+        @media (max-width: 720px) {
+            .wizard-volume-grid {
+                grid-template-columns: 1fr;
+            }
+            .wizard-volume-actions {
+                justify-content: flex-start;
+            }
+        }
+        .wizard-actions {
+            padding: 18px 24px;
+            border-top: 1px solid #eef2f7;
+            background: #ffffff;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .wizard-actions .btn {
+            border-radius: 12px;
+            padding: 12px 18px;
+            font-weight: 600;
+        }
+        .btn-ghost {
+            background: transparent;
+            color: var(--primary-color);
+            border: 1px dashed #b8cffb;
+        }
+        /* Movimentações */
+        .movimentacoes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .movimentacao-item {
+            border: 1px dashed #cfe0ff;
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: #fbfdff;
+        }
+        .movimentacao-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .movimentacao-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.85rem;
+            color: #5b6b86;
+        }
+        /* Liberação */
+        .confirm-slider {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .confirm-slider input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary-color);
+        }
+        .confirm-slider span {
+            font-size: 0.85rem;
+            color: #5b6b86;
+        }
+        .confirm-statement {
+            background: #f8fbff;
+            border: 1px solid #dbe8ff;
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .signature-methods {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+        .signature-methods label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid #dbe8ff;
+            background: #f8fbff;
+            cursor: pointer;
+        }
+        .signature-area {
+            border: 1px dashed #cfe0ff;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+        }
+        .signature-canvas {
+            width: 100%;
+            height: 220px;
+            border: 1px solid #e1e9f5;
+            border-radius: 12px;
+            background: #fefefe;
+            touch-action: none;
+        }
+        .signature-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+        .signature-actions .btn {
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .cpf-input {
+            max-width: 180px;
+        }
+        .info-box {
+            background: #f5f9ff;
+            border: 1px solid #dbe8ff;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: #0a3a88;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .btn-loading {
+            opacity: 0.85;
+            pointer-events: none;
+            padding-right: 36px;
+        }
+        .btn-loading::after {
+            content: '';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 0.6s linear infinite;
+            transform: translateY(-50%);
+        }
+        @keyframes spin {
+            from { transform: translateY(-50%) rotate(0deg); }
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        /* Notificações */
+        .notification-panel {
+            display: none;
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            width: 350px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            z-index: 1500;
+        }
+        .notification-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+        }
+        .notification-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .notification-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f5f5f5;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+        .notification-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+        .notification-icon.warning {
+            background-color: var(--warning-color);
+        }
+        .notification-icon.danger {
+            background-color: var(--danger-color);
+        }
+        .notification-content {
+            flex: 1;
+        }
+        .notification-title {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+        .notification-time {
+            font-size: 0.8rem;
+            color: #999;
+        }
+        /* Páginas */
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        /* Responsividade */
+        @media (max-width: 992px) {
+            .sidebar {
+                width: 70px;
+                overflow: visible;
+            }
+            .sidebar-header h2, .sidebar-header p, .sidebar-menu span {
+                display: none;
+            }
+            .sidebar-menu a {
+                text-align: center;
+                padding: 15px 10px;
+            }
+            .sidebar-menu i {
+                margin-right: 0;
+                font-size: 1.2rem;
+            }
+            .main-content {
+                margin-left: 70px;
+            }
+        }
+        @media (max-width: 768px) {
+            .cards-hero {
+                grid-template-columns: 1fr 1fr;
+            }
+            .armarios-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 576px) {
+            .cards-hero {
+                grid-template-columns: 1fr;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .header-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>Controle de Armários</h2>
+            <p>Hospital Central</p>
+        </div>
+        <nav class="sidebar-menu">
+            <ul>
+                <li><a href="#" class="active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
+                <li><a href="#" data-page="visitantes"><i class="fas fa-user-clock"></i> <span>Visitantes</span></a></li>
+                <li><a href="#" data-page="acompanhantes"><i class="fas fa-user-friends"></i> <span>Acompanhantes</span></a></li>
+                <li><a href="#" data-page="historico-visitantes"><i class="fas fa-history"></i> <span>Histórico Visitantes</span></a></li>
+                <li><a href="#" data-page="historico-acompanhantes"><i class="fas fa-history"></i> <span>Histórico Acompanhantes</span></a></li>
+                <li><a href="#" data-page="termo-responsabilidade"><i class="fas fa-file-signature"></i> <span>Termo de Responsabilidade</span></a></li>
+                <li><a href="#" data-page="cadastro-armarios"><i class="fas fa-archive"></i> <span>Cadastro de Armários</span></a></li>
+                <li><a href="#" data-page="cadastro-unidades"><i class="fas fa-hospital"></i> <span>Cadastro de Unidades</span></a></li>
+                <li><a href="#" data-page="usuarios"><i class="fas fa-users"></i> <span>Usuários</span></a></li>
+                <li><a href="#" data-page="logs"><i class="fas fa-clipboard-list"></i> <span>LOGS</span></a></li>
+            </ul>
+        </nav>
+    </div>
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-title">
+                <h1>Dashboard</h1>
+            </div>
+            <div class="header-actions">
+                <div class="header-selectors">
+                    <div class="selector-group">
+                        <label for="profile-select">Perfil</label>
+                        <select id="profile-select">
+                            <option value="visitante">Visitante</option>
+                            <option value="acompanhante">Acompanhante</option>
+                            <option value="ambos">Acomp/Visit</option>
+                            <option value="admin" selected>Administrador</option>
+                        </select>
+                    </div>
+                    <div class="selector-group">
+                        <label for="unit-select">Unidade</label>
+                        <select id="unit-select">
+                            <option value="todas">Todas as unidades</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="notification-bell" id="notification-bell">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </div>
+                <div class="user-profile">
+                    <div class="user-avatar">JS</div>
+                    <div>
+                        <div>João Silva</div>
+                        <div style="font-size: 0.8rem; color: #666;">Administrador</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Páginas -->
+        <div id="pages-container">
+            <!-- Dashboard -->
+            <div class="page active" id="dashboard">
+                <!-- Cards Hero -->
+                <div class="cards-hero">
+                    <div class="card livre">
+                        <div class="card-header">
+                            <div class="card-title">Livres</div>
+                            <div class="card-icon"><i class="fas fa-check-circle"></i></div>
+                        </div>
+                        <div class="card-value" id="livres-count">0</div>
+                        <div class="card-description">Armários disponíveis</div>
+                    </div>
+                    <div class="card em-uso">
+                        <div class="card-header">
+                            <div class="card-title">Em uso</div>
+                            <div class="card-icon"><i class="fas fa-user-clock"></i></div>
+                        </div>
+                        <div class="card-value" id="em-uso-count">0</div>
+                        <div class="card-description">Armários ocupados</div>
+                    </div>
+                    <div class="card proximo">
+                        <div class="card-header">
+                            <div class="card-title">Próximo do horário</div>
+                            <div class="card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        </div>
+                        <div class="card-value" id="proximo-count">0</div>
+                        <div class="card-description">Armários prestes a vencer</div>
+                    </div>
+                    <div class="card vencido">
+                        <div class="card-header">
+                            <div class="card-title">Vencidos</div>
+                            <div class="card-icon"><i class="fas fa-times-circle"></i></div>
+                        </div>
+                        <div class="card-value" id="vencidos-count">0</div>
+                        <div class="card-description">Armários com tempo excedido</div>
+                    </div>
+                </div>
+                <!-- Filtros -->
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="todos">Todos</button>
+                    <button class="filter-btn" data-filter="livre">Livre</button>
+                    <button class="filter-btn" data-filter="em-uso">Em uso</button>
+                    <button class="filter-btn" data-filter="proximo">Próximo do horário</button>
+                    <button class="filter-btn" data-filter="vencido">Vencido</button>
+                </div>
+                <!-- Tabela de Armários -->
+                <div class="armarios-grid" id="armarios-container">
+                    <!-- Os armários serão carregados aqui via JavaScript -->
+                </div>
+            </div>
+            <!-- Visitantes -->
+            <div class="page" id="visitantes">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Armários de Visitantes</h3>
+                        <button class="btn btn-primary" id="btn-novo-visitante">
+                            <i class="fas fa-plus"></i> Novo Cadastro
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-visitantes">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Unidade</th>
+                                    <th>Status</th>
+                                    <th>Visitante</th>
+                                    <th>Paciente</th>
+                                    <th>Leito</th>
+                                    <th>Volumes</th>
+                                    <th>Hora Início</th>
+                                    <th>Previsão Saída</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Acompanhantes -->
+            <div class="page" id="acompanhantes">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Armários de Acompanhantes</h3>
+                        <button class="btn btn-primary" id="btn-novo-acompanhante">
+                            <i class="fas fa-plus"></i> Novo Cadastro
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-acompanhantes">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Unidade</th>
+                                    <th>Status</th>
+                                    <th>Acompanhante</th>
+                                    <th>Paciente</th>
+                                    <th>Leito</th>
+                                    <th>Volumes</th>
+                                    <th>Hora Início</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Histórico Visitantes -->
+            <div class="page" id="historico-visitantes">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Histórico de Visitantes</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-historico-visitantes">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Armário</th>
+                                    <th>Visitante</th>
+                                    <th>Paciente</th>
+                                    <th>Leito</th>
+                                    <th>Volumes</th>
+                                    <th>Hora Início</th>
+                                    <th>Hora Fim</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Histórico Acompanhantes -->
+            <div class="page" id="historico-acompanhantes">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Histórico de Acompanhantes</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-historico-acompanhantes">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Armário</th>
+                                    <th>Acompanhante</th>
+                                    <th>Paciente</th>
+                                    <th>Leito</th>
+                                    <th>Volumes</th>
+                                    <th>Hora Início</th>
+                                    <th>Hora Fim</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Termo de Responsabilidade -->
+            <div class="page" id="termo-responsabilidade">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Termos de Responsabilidade Ativos</h3>
+                        <p style="color:#5b6b86; font-size:0.9rem;">Apenas armários de acompanhantes com termo aplicado aparecem nesta lista.</p>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-termos">
+                            <thead>
+                                <tr>
+                                    <th>Armário</th>
+                                    <th>Acompanhante</th>
+                                    <th>Paciente</th>
+                                    <th>Aplicado em</th>
+                                    <th>Movimentações</th>
+                                    <th>PDF</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Cadastro de Armários -->
+            <div class="page" id="cadastro-armarios">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Cadastro de Armários</h3>
+                        <button class="btn btn-primary" id="btn-novo-armario">
+                            <i class="fas fa-plus"></i> Novo Armário
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-cadastro-armarios">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Número</th>
+                                    <th>Tipo</th>
+                                    <th>Unidade</th>
+                                    <th>Localização</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Cadastro de Unidades -->
+            <div class="page" id="cadastro-unidades">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Cadastro de Unidades</h3>
+                        <button class="btn btn-primary" id="btn-nova-unidade">
+                            <i class="fas fa-plus"></i> Nova Unidade
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-unidades">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Unidade</th>
+                                    <th>Status</th>
+                                    <th>Armários cadastrados</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Usuários -->
+            <div class="page" id="usuarios">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Usuários do Sistema</h3>
+                        <button class="btn btn-primary" id="btn-novo-usuario">
+                            <i class="fas fa-plus"></i> Novo Usuário
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-usuarios">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Perfil</th>
+                                    <th>Acesso Visitantes</th>
+                                    <th>Acesso Acompanhantes</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- LOGS -->
+            <div class="page" id="logs">
+                <div class="data-table">
+                    <div class="table-header">
+                        <h3>Logs do Sistema</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="tabela-logs">
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Usuário</th>
+                                    <th>Ação</th>
+                                    <th>Detalhes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dados serão preenchidos via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal para Cadastro de Armário -->
+    <div class="modal" id="armario-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">Cadastrar Armário</div>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="armario-form">
+                    <div class="form-group">
+                        <label for="nome-visitante">Nome do Visitante</label>
+                        <input type="text" id="nome-visitante" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="nome-paciente">Nome do Paciente</label>
+                        <input type="text" id="nome-paciente" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="leito">Leito</label>
+                        <input type="text" id="leito" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="volumes">Quantidade de Volumes</label>
+                        <input type="number" id="volumes" class="form-control" min="1" required>
+                    </div>
+                    <div class="form-group" id="hora-prevista-group">
+                        <label for="hora-prevista">Hora Prevista de Saída</label>
+                        <input type="time" id="hora-prevista" class="form-control" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="btn-salvar">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Modal para Cadastro de Usuário -->
+    <div class="modal" id="usuario-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="usuario-modal-title">Cadastrar Usuário</div>
+                <button class="modal-close" id="usuario-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="usuario-form">
+                    <div class="form-group">
+                        <label for="usuario-nome">Nome Completo</label>
+                        <input type="text" id="usuario-nome" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="usuario-email">Email</label>
+                        <input type="email" id="usuario-email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="usuario-perfil">Perfil</label>
+                        <select id="usuario-perfil" class="form-control" required>
+                            <option value="usuario">Usuário</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="acessos-group">
+                        <label>Acessos</label>
+                        <div>
+                            <input type="checkbox" id="acesso-visitantes" checked>
+                            <label for="acesso-visitantes">Visitantes</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="acesso-acompanhantes" checked>
+                            <label for="acesso-acompanhantes">Acompanhantes</label>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="usuario-btn-cancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="usuario-btn-salvar">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Termo de Responsabilidade -->
+    <div class="modal modal-full" id="termo-modal">
+        <div class="modal-content modal-scrollable">
+            <div class="wizard-card" id="termo-card">
+                <div class="wizard-header">
+                    <div>
+                        <div class="wizard-title">Termo de responsabilidade do armário <span id="termo-armario"></span></div>
+                        <div class="wizard-subtitle">Preencha os dados do acompanhante e do paciente antes de aplicar o termo.</div>
+                    </div>
+                    <div class="wizard-progress">
+                        <div class="wizard-progress-bar"><span id="termo-progress"></span></div>
+                        <div class="wizard-progress-label" id="termo-progress-label">Passo 1 de 3</div>
+                    </div>
+                    <button class="modal-close" id="termo-modal-close" type="button">&times;</button>
+                </div>
+                <div class="wizard-body">
+                    <form id="termo-form" autocomplete="off">
+                        <div class="wizard-step active" data-step="0">
+                            <div class="wizard-grid">
+                                <div class="wizard-col-12"><div class="wizard-badge">Dados do paciente</div></div>
+                                <div class="wizard-col-8">
+                                    <div class="wizard-field">
+                                        <label for="termo-paciente" class="wizard-required">Nome do paciente</label>
+                                        <input type="text" id="termo-paciente" class="wizard-input" required>
+                                        <div class="wizard-error">Informe o nome completo do paciente.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-4">
+                                    <div class="wizard-field">
+                                        <label for="termo-prontuario" class="wizard-required">Prontuário</label>
+                                        <input type="text" id="termo-prontuario" class="wizard-input" required>
+                                        <div class="wizard-error">Informe o número do prontuário.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-4">
+                                    <div class="wizard-field">
+                                        <label for="termo-nascimento" class="wizard-required">Data de nascimento</label>
+                                        <input type="date" id="termo-nascimento" class="wizard-input" required>
+                                        <div class="wizard-error">Informe a data de nascimento.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-4">
+                                    <div class="wizard-field">
+                                        <label for="termo-setor" class="wizard-required">Setor de internação</label>
+                                        <input type="text" id="termo-setor" class="wizard-input" required>
+                                        <div class="wizard-error">Informe o setor.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-4">
+                                    <div class="wizard-field">
+                                        <label for="termo-leito" class="wizard-required">Leito</label>
+                                        <input type="text" id="termo-leito" class="wizard-input" required>
+                                        <div class="wizard-error">Informe o leito.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-12">
+                                    <div class="wizard-field">
+                                        <label class="wizard-required">Paciente consciente/orientado e responsável pelos pertences?</label>
+                                        <div class="wizard-inline">
+                                            <label class="wizard-chip"><input type="radio" name="termo-consciente" value="Sim" required> Sim</label>
+                                            <label class="wizard-chip"><input type="radio" name="termo-consciente" value="Não"> Não</label>
+                                        </div>
+                                        <div class="wizard-error">Selecione uma opção.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="wizard-step" data-step="1">
+                            <div class="wizard-grid">
+                                <div class="wizard-col-12"><div class="wizard-badge">Responsável pelo armário</div></div>
+                                <div class="wizard-col-8">
+                                    <div class="wizard-field">
+                                        <label for="termo-resp-nome" class="wizard-required">Nome do acompanhante</label>
+                                        <input type="text" id="termo-resp-nome" class="wizard-input" required>
+                                        <div class="wizard-error">Informe o nome do acompanhante.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-4">
+                                    <div class="wizard-field">
+                                        <label for="termo-resp-telefone">Telefone(s)</label>
+                                        <input type="tel" id="termo-resp-telefone" class="wizard-input" placeholder="(00) 00000-0000">
+                                    </div>
+                                </div>
+                                <div class="wizard-col-6">
+                                    <div class="wizard-field">
+                                        <label for="termo-resp-doc">Documento (RG ou CPF)</label>
+                                        <input type="text" id="termo-resp-doc" class="wizard-input" placeholder="000.000.000-00">
+                                    </div>
+                                </div>
+                                <div class="wizard-col-6">
+                                    <div class="wizard-field">
+                                        <label for="termo-resp-parentesco">Grau de parentesco</label>
+                                        <input type="text" id="termo-resp-parentesco" class="wizard-input" placeholder="Ex.: Filho(a)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="wizard-step" data-step="2">
+                            <div class="wizard-grid">
+                                <div class="wizard-col-12"><div class="wizard-badge">Orientações e ciência</div></div>
+                                <div class="wizard-col-12">
+                                    <div class="wizard-field">
+                                        <label class="wizard-required">Confirma ciência das orientações?</label>
+                                        <div class="wizard-inline" style="align-items:flex-start;">
+                                            <label class="wizard-chip" style="align-items:flex-start;">
+                                                <input type="checkbox" id="termo-ori1" required>
+                                                <span>Seus pertences estão sob sua guarda e responsabilidade.</span>
+                                            </label>
+                                        </div>
+                                        <div class="wizard-inline" style="align-items:flex-start;">
+                                            <label class="wizard-chip" style="align-items:flex-start;">
+                                                <input type="checkbox" id="termo-ori2" required>
+                                                <span>Em piora clínica, os pertences serão recolhidos e protocolados no NAC.</span>
+                                            </label>
+                                        </div>
+                                        <div class="wizard-inline" style="align-items:flex-start;">
+                                            <label class="wizard-chip" style="align-items:flex-start;">
+                                                <input type="checkbox" id="termo-ori3" required>
+                                                <span>Após 15 dias da alta/transferência, itens não retirados poderão ser descartados conforme normas.</span>
+                                            </label>
+                                        </div>
+                                        <div class="wizard-error">É necessário marcar todas as caixas de ciência.</div>
+                                    </div>
+                                </div>
+                                <div class="wizard-col-12">
+                                    <div class="wizard-field" id="termo-volumes-field">
+                                        <label class="wizard-required">Quantidade e descrição de bolsas/pacotes</label>
+                                        <div class="wizard-volumes-list" id="termo-volumes-list"></div>
+                                        <div class="wizard-inline" style="margin-top: 8px; align-items: center;">
+                                            <button type="button" class="btn btn-ghost" id="termo-add-volume">+ Adicionar volume</button>
+                                            <span class="wizard-hint">Informe a quantidade e descreva cada volume guardado.</span>
+                                        </div>
+                                        <div class="wizard-error">Informe ao menos um volume com quantidade e descrição.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn-ghost" id="termo-btn-voltar">Voltar</button>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" class="btn btn-secondary" id="termo-btn-cancelar">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="termo-btn-avancar">Avançar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal de Movimentações -->
+    <div class="modal modal-large" id="movimentacao-modal">
+        <div class="modal-content modal-scrollable">
+            <div class="modal-header">
+                <div class="modal-title" id="movimentacao-modal-title">Movimentações</div>
+                <button class="modal-close" id="movimentacao-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="info-box">
+                    Registre entradas e saídas de objetos do armário sempre que ocorrer qualquer movimentação.
+                </div>
+                <div class="movimentacoes-list" id="movimentacoes-list"></div>
+                <form id="movimentacao-form">
+                    <div class="form-group">
+                        <label for="mov-tipo">Tipo de movimentação</label>
+                        <select id="mov-tipo" class="form-control" required>
+                            <option value="">Selecione</option>
+                            <option value="entrada">Entrada de pertences</option>
+                            <option value="saida">Saída de pertences</option>
+                            <option value="conferencia">Conferência</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mov-descricao">Descrição</label>
+                        <textarea id="mov-descricao" class="form-control" rows="3" required placeholder="Descreva brevemente o que ocorreu"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="mov-responsavel">Responsável pelo registro</label>
+                        <input type="text" id="mov-responsavel" class="form-control" placeholder="Nome do colaborador" required>
+                    </div>
+                    <div class="form-group" style="display:flex; gap:12px;">
+                        <div style="flex:1;">
+                            <label for="mov-data">Data</label>
+                            <input type="date" id="mov-data" class="form-control" required>
+                        </div>
+                        <div style="flex:1;">
+                            <label for="mov-hora">Hora</label>
+                            <input type="time" id="mov-hora" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="justify-content:flex-start;">
+                        <button type="submit" class="btn btn-primary">Adicionar movimentação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Modal de Liberação -->
+    <div class="modal modal-large" id="liberacao-modal">
+        <div class="modal-content modal-scrollable">
+            <div class="modal-header">
+                <div class="modal-title">Encerrar armário <span id="liberacao-armario"></span></div>
+                <button class="modal-close" id="liberacao-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Confirme os dados antes de liberar o armário. Esta ação removerá o vínculo do acompanhante e encerrará o termo.</p>
+                <div class="info-box" id="liberacao-detalhes"></div>
+                <div class="confirm-slider">
+                    <label for="liberacao-slider">Arraste para confirmar a identificação</label>
+                    <input type="range" id="liberacao-slider" min="0" max="100" value="0">
+                    <span>Deslize o controle totalmente para a direita para habilitar a confirmação.</span>
+                </div>
+                <div class="confirm-statement">
+                    <input type="checkbox" id="liberacao-checkbox">
+                    <span>Declaro que após ter recebido os devidos esclarecimentos, confirmo que esta liberação corresponde à pessoa identificada e estou ciente das responsabilidades assumidas.</span>
+                </div>
+                <p><strong>Data:</strong> <span id="liberacao-data"></span></p>
+                <div class="signature-section">
+                    <p style="margin-bottom:10px;">Escolha uma forma de confirmação:</p>
+                    <div class="signature-methods">
+                        <label><input type="radio" name="liberacao-metodo" value="assinatura" checked> Assinatura digital</label>
+                        <label><input type="radio" name="liberacao-metodo" value="cpf"> 5 primeiros dígitos do CPF</label>
+                    </div>
+                    <div class="signature-area" id="assinatura-area">
+                        <canvas id="signature-canvas" class="signature-canvas"></canvas>
+                        <div class="signature-actions">
+                            <button type="button" class="btn btn-secondary" id="signature-clear">Limpar assinatura</button>
+                        </div>
+                    </div>
+                    <div class="signature-area" id="cpf-area" style="display:none;">
+                        <div class="wizard-field">
+                            <label for="cpf-confirmacao" class="wizard-required">Informe os 5 primeiros dígitos do CPF</label>
+                            <input type="text" id="cpf-confirmacao" class="form-control cpf-input" maxlength="5" inputmode="numeric" pattern="[0-9]*">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="liberacao-btn-cancelar">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="liberacao-btn-confirmar" disabled>Confirmar liberação</button>
+            </div>
+        </div>
+    </div>
+    <!-- Painel de Notificações -->
+    <div class="notification-panel" id="notification-panel">
+        <div class="notification-header">
+            Notificações
+        </div>
+        <div class="notification-list">
+            <div class="notification-item">
+                <div class="notification-icon danger">
+                    <i class="fas fa-exclamation"></i>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">Armário V-15 vencido</div>
+                    <div class="notification-time">Há 5 minutos</div>
+                </div>
+            </div>
+            <div class="notification-item">
+                <div class="notification-icon danger">
+                    <i class="fas fa-exclamation"></i>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">Armário V-32 vencido</div>
+                    <div class="notification-time">Há 12 minutos</div>
+                </div>
+            </div>
+            <div class="notification-item">
+                <div class="notification-icon warning">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">Armário A-07 próximo do horário</div>
+                    <div class="notification-time">Há 2 minutos</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // URL do Google Apps Script - ATUALIZE COM SUA URL
+        const SCRIPT_URL = 'https://script.google.com/a/macros/isgh.org.br/s/AKfycbzbGb6sQR1auYsyTB-kwPos7Cd7swLuTUDiAzzpwTPW2cj76ykYzKYgBDXA-g5ef7pbpw/exec';
+        // Estado da aplicação
+        let estado = {
+            perfilAtual: 'admin',
+            unidadeAtual: 'todas',
+            filtroAtual: 'todos',
+            paginaAtual: 'dashboard',
+            armarios: [],
+            cadastroArmarios: [],
+            unidades: [],
+            notificacoes: [],
+            termos: {},
+            movimentacoes: {},
+            usuarios: [],
+            logs: []
+        };
+        // Elementos DOM
+        const elementos = {
+            profileSelect: document.getElementById('profile-select'),
+            unitSelect: document.getElementById('unit-select'),
+            notificationBell: document.getElementById('notification-bell'),
+            notificationPanel: document.getElementById('notification-panel'),
+            notificationBadge: document.querySelector('.notification-badge'),
+            armariosContainer: document.getElementById('armarios-container'),
+            armarioModal: document.getElementById('armario-modal'),
+            usuarioModal: document.getElementById('usuario-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            armarioForm: document.getElementById('armario-form'),
+            usuarioForm: document.getElementById('usuario-form'),
+            modalClose: document.getElementById('modal-close'),
+            usuarioModalClose: document.getElementById('usuario-modal-close'),
+            btnCancelar: document.getElementById('btn-cancelar'),
+            usuarioBtnCancelar: document.getElementById('usuario-btn-cancelar'),
+            nomeVisitanteLabel: document.querySelector("label[for='nome-visitante']"),
+            horaPrevistaInput: document.getElementById('hora-prevista'),
+            horaPrevistaGroup: document.getElementById('hora-prevista-group'),
+            filterBtns: document.querySelectorAll('.filter-btn'),
+            cardsCount: {
+                livres: document.getElementById('livres-count'),
+                emUso: document.getElementById('em-uso-count'),
+                proximo: document.getElementById('proximo-count'),
+                vencidos: document.getElementById('vencidos-count')
+            },
+            pages: document.querySelectorAll('.page'),
+            menuLinks: document.querySelectorAll('.sidebar-menu a'),
+            termoModal: document.getElementById('termo-modal'),
+            termoForm: document.getElementById('termo-form'),
+            termoModalClose: document.getElementById('termo-modal-close'),
+            termoBtnVoltar: document.getElementById('termo-btn-voltar'),
+            termoBtnAvancar: document.getElementById('termo-btn-avancar'),
+            termoBtnCancelar: document.getElementById('termo-btn-cancelar'),
+            termoProgress: document.getElementById('termo-progress'),
+            termoProgressLabel: document.getElementById('termo-progress-label'),
+            termoArmario: document.getElementById('termo-armario'),
+            termoVolumesList: document.getElementById('termo-volumes-list'),
+            termoAddVolume: document.getElementById('termo-add-volume'),
+            termoVolumesField: document.getElementById('termo-volumes-field'),
+            tabelaTermos: document.getElementById('tabela-termos'),
+            tabelaTermosBody: document.querySelector('#tabela-termos tbody'),
+            movimentacaoModal: document.getElementById('movimentacao-modal'),
+            movimentacaoModalClose: document.getElementById('movimentacao-modal-close'),
+            movimentacoesList: document.getElementById('movimentacoes-list'),
+            movimentacaoForm: document.getElementById('movimentacao-form'),
+            movimentacaoModalTitle: document.getElementById('movimentacao-modal-title'),
+            movTipo: document.getElementById('mov-tipo'),
+            movDescricao: document.getElementById('mov-descricao'),
+            movResponsavel: document.getElementById('mov-responsavel'),
+            movData: document.getElementById('mov-data'),
+            movHora: document.getElementById('mov-hora'),
+            liberacaoModal: document.getElementById('liberacao-modal'),
+            liberacaoModalClose: document.getElementById('liberacao-modal-close'),
+            liberacaoDetalhes: document.getElementById('liberacao-detalhes'),
+            liberacaoArmario: document.getElementById('liberacao-armario'),
+            liberacaoSlider: document.getElementById('liberacao-slider'),
+            liberacaoCheckbox: document.getElementById('liberacao-checkbox'),
+            liberacaoData: document.getElementById('liberacao-data'),
+            liberacaoBtnCancelar: document.getElementById('liberacao-btn-cancelar'),
+            liberacaoBtnConfirmar: document.getElementById('liberacao-btn-confirmar'),
+            assinaturaCanvas: document.getElementById('signature-canvas'),
+            assinaturaClear: document.getElementById('signature-clear'),
+            assinaturaArea: document.getElementById('assinatura-area'),
+            cpfArea: document.getElementById('cpf-area'),
+            cpfConfirmacao: document.getElementById('cpf-confirmacao'),
+            liberacaoMetodoRadios: document.querySelectorAll('input[name="liberacao-metodo"]'),
+            btnNovaUnidade: document.getElementById('btn-nova-unidade'),
+            tabelaUnidades: document.getElementById('tabela-unidades'),
+            tabelaUnidadesBody: document.querySelector('#tabela-unidades tbody')
+        };
+        const termoSteps = Array.from(document.querySelectorAll('#termo-form .wizard-step'));
+        let termoPassoAtual = 0;
+        let termoArmarioAtual = null;
+        let movimentacaoArmarioAtual = null;
+        let liberacaoArmarioAtual = null;
+        let assinaturaDesenhada = false;
+        let desenhandoAssinatura = false;
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            inicializarCanvasAssinatura();
+            inicializarEventos();
+            carregarDadosIniciais();
+        });
+        // Função para chamar o Google Apps Script
+        async function callGoogleScript(action, data = {}) {
+            try {
+                const formData = new FormData();
+                formData.append('action', action);
+               
+                // Adicionar dados ao formData
+                Object.keys(data).forEach(key => {
+                    formData.append(key, data[key]);
+                });
+               
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+               
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Erro ao chamar Google Script:', error);
+                mostrarErro('Erro de conexão com o servidor');
+                return { success: false, error: error.message };
+            }
+        }
+        async function carregarDadosIniciais() {
+            try {
+                // Verificar inicialização
+                const resultado = await callGoogleScript('verificarInicializacao');
+                if (!resultado.success || !resultado.inicializado) {
+                    await callGoogleScript('inicializarPlanilha');
+                }
+                // Carregar dados
+                await Promise.all([
+                    carregarArmarios(),
+                    carregarUnidades(),
+                    carregarUsuarios(),
+                    carregarEstatisticas(),
+                    carregarNotificacoes()
+                ]);
+                atualizarInterface();
+               
+            } catch (error) {
+                console.error('Erro ao carregar dados iniciais:', error);
+                mostrarErro('Erro ao carregar dados do sistema');
+            }
+        }
+        async function carregarArmarios() {
+            const resultado = await callGoogleScript('getArmarios', {
+                tipo: estado.perfilAtual
+            });
+           
+            if (resultado.success) {
+                estado.armarios = resultado.data;
+            }
+        }
+        async function carregarUnidades() {
+            const resultado = await callGoogleScript('getUnidades');
+            if (resultado.success) {
+                estado.unidades = resultado.data;
+                atualizarSeletoresUnidade();
+            }
+        }
+        async function carregarUsuarios() {
+            const resultado = await callGoogleScript('getUsuarios');
+            if (resultado.success) {
+                estado.usuarios = resultado.data;
+            }
+        }
+        async function carregarEstatisticas() {
+            const resultado = await callGoogleScript('getEstatisticasDashboard', {
+                tipoUsuario: estado.perfilAtual
+            });
+           
+            if (resultado.success) {
+                const stats = resultado.data;
+                elementos.cardsCount.livres.textContent = stats.livres;
+                elementos.cardsCount.emUso.textContent = stats.emUso;
+                elementos.cardsCount.proximo.textContent = stats.proximo;
+                elementos.cardsCount.vencidos.textContent = stats.vencidos;
+            }
+        }
+        async function carregarNotificacoes() {
+            const resultado = await callGoogleScript('getNotificacoes');
+            if (resultado.success) {
+                estado.notificacoes = resultado.data;
+                elementos.notificationBadge.textContent = estado.notificacoes.length;
+                atualizarPainelNotificacoes();
+            }
+        }
+        function inicializarCanvasAssinatura() {
+            const canvas = elementos.assinaturaCanvas;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+           
+            const ctx = canvas.getContext('2d');
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#0b1324';
+        }
+        function iniciarLoadingBotao(botao) {
+            if (!botao) return () => {};
+            const inicio = Date.now();
+            const duracaoMinima = 300;
+            botao.classList.add('btn-loading');
+            botao.disabled = true;
+            return () => {
+                const encerrar = () => {
+                    botao.classList.remove('btn-loading');
+                    botao.disabled = false;
+                };
+                const decorrido = Date.now() - inicio;
+                if (decorrido < duracaoMinima) {
+                    setTimeout(encerrar, duracaoMinima - decorrido);
+                } else {
+                    encerrar();
+                }
+            };
+        }
+        function configurarBotaoAcao(botao, acao) {
+            if (!botao) return;
+            botao.addEventListener('click', async (event) => {
+                const finalizar = iniciarLoadingBotao(event.currentTarget);
+                try {
+                    await acao();
+                } finally {
+                    finalizar();
+                }
+            });
+        }
+        function mostrarErro(mensagem) {
+            Swal.fire({
+                title: 'Erro',
+                text: mensagem,
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        }
+        function mostrarSucesso(mensagem) {
+            Swal.fire({
+                title: 'Sucesso!',
+                text: mensagem,
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
+        }
+        // Configuração de eventos
+        function inicializarEventos() {
+            // Seletor de perfil
+            if (elementos.profileSelect) {
+                elementos.profileSelect.addEventListener('change', function() {
+                    estado.perfilAtual = this.value;
+                    atualizarInterface();
+                    carregarDadosTabelas();
+                });
+            }
+            if (elementos.unitSelect) {
+                elementos.unitSelect.addEventListener('change', function() {
+                    estado.unidadeAtual = this.value;
+                    atualizarInterface();
+                    carregarDadosTabelas();
+                });
+            }
+            // Notificações
+            if (elementos.notificationBell) {
+                elementos.notificationBell.addEventListener('click', function() {
+                    elementos.notificationPanel.style.display =
+                        elementos.notificationPanel.style.display === 'block' ? 'none' : 'block';
+                });
+            }
+            // Fechar modais
+            elementos.modalClose.addEventListener('click', fecharModalArmario);
+            elementos.usuarioModalClose.addEventListener('click', fecharModalUsuario);
+            elementos.btnCancelar.addEventListener('click', fecharModalArmario);
+            elementos.usuarioBtnCancelar.addEventListener('click', fecharModalUsuario);
+            // Filtros
+            elementos.filterBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    elementos.filterBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    estado.filtroAtual = this.dataset.filter;
+                    renderizarArmarios();
+                });
+            });
+            // Formulários
+            elementos.armarioForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                salvarArmario();
+            });
+            elementos.usuarioForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                salvarUsuario();
+            });
+            // Navegação do menu
+            elementos.menuLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetPage = this.dataset.page;
+                    navegarParaPagina(targetPage);
+                });
+            });
+            // Botões de ação
+            configurarBotaoAcao(document.getElementById('btn-novo-visitante'), () => abrirModalNovoArmario('visitante'));
+            configurarBotaoAcao(document.getElementById('btn-novo-acompanhante'), () => abrirModalNovoArmario('acompanhante'));
+            configurarBotaoAcao(document.getElementById('btn-novo-armario'), () => abrirModalNovoArmarioFisico());
+            configurarBotaoAcao(document.getElementById('btn-novo-usuario'), () => abrirModalNovoUsuario());
+            configurarBotaoAcao(elementos.btnNovaUnidade, () => abrirModalNovaUnidade());
+            // Termo de responsabilidade
+            elementos.termoBtnVoltar.addEventListener('click', () => navegarPassoTermo(-1));
+            elementos.termoBtnAvancar.addEventListener('click', avancarOuAplicarTermo);
+            elementos.termoBtnCancelar.addEventListener('click', fecharTermoModal);
+            elementos.termoModalClose.addEventListener('click', fecharTermoModal);
+            if (elementos.termoAddVolume) {
+                elementos.termoAddVolume.addEventListener('click', () => {
+                    const novoVolume = adicionarVolumeTermo();
+                    novoVolume?.querySelector('.termo-volume-qty')?.focus();
+                });
+            }
+            if (elementos.termoVolumesList) {
+                elementos.termoVolumesList.addEventListener('click', evento => {
+                    const botao = evento.target.closest('.btn-remove-volume');
+                    if (!botao) return;
+                    const item = botao.closest('.wizard-volume-item');
+                    removerVolumeTermo(item);
+                });
+                elementos.termoVolumesList.addEventListener('input', () => {
+                    elementos.termoVolumesField?.classList.remove('invalid');
+                });
+            }
+            // Movimentações
+            elementos.movimentacaoModalClose.addEventListener('click', fecharMovimentacaoModal);
+            elementos.movimentacaoForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                salvarMovimentacao();
+            });
+            // Tabela de termos
+            elementos.tabelaTermos.addEventListener('click', tratarAcaoTermo);
+            if (elementos.tabelaUnidadesBody) {
+                elementos.tabelaUnidadesBody.addEventListener('click', tratarAcaoUnidade);
+            }
+            // Liberação de armário
+            elementos.liberacaoModalClose.addEventListener('click', fecharModalLiberacao);
+            elementos.liberacaoBtnCancelar.addEventListener('click', fecharModalLiberacao);
+            elementos.liberacaoSlider.addEventListener('input', atualizarEstadoLiberacao);
+            elementos.liberacaoCheckbox.addEventListener('change', atualizarEstadoLiberacao);
+            elementos.liberacaoBtnConfirmar.addEventListener('click', confirmarLiberacao);
+            elementos.assinaturaClear.addEventListener('click', function() {
+                limparAssinatura();
+                atualizarEstadoLiberacao();
+            });
+            elementos.cpfConfirmacao.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 5);
+                atualizarEstadoLiberacao();
+            });
+            elementos.liberacaoMetodoRadios.forEach(radio => radio.addEventListener('change', alternarMetodoLiberacao));
+            elementos.assinaturaCanvas.addEventListener('pointerdown', iniciarAssinatura);
+            elementos.assinaturaCanvas.addEventListener('pointermove', desenharAssinatura);
+            elementos.assinaturaCanvas.addEventListener('pointerup', finalizarAssinatura);
+            elementos.assinaturaCanvas.addEventListener('pointerleave', finalizarAssinatura);
+            elementos.assinaturaCanvas.addEventListener('pointercancel', finalizarAssinatura);
+            alternarMetodoLiberacao();
+            // Fechar notificações ao clicar fora
+            document.addEventListener('click', function(e) {
+                if (!elementos.notificationBell.contains(e.target) &&
+                    !elementos.notificationPanel.contains(e.target)) {
+                    elementos.notificationPanel.style.display = 'none';
+                }
+            });
+        }
+        // Navegação entre páginas
+        function navegarParaPagina(pagina) {
+            // Atualizar menu ativo
+            elementos.menuLinks.forEach(link => link.classList.remove('active'));
+            document.querySelector(`[data-page="${pagina}"]`).classList.add('active');
+           
+            // Atualizar página ativa
+            elementos.pages.forEach(page => page.classList.remove('active'));
+            document.getElementById(pagina).classList.add('active');
+           
+            // Atualizar título
+            const pageTitle = document.querySelector(`[data-page="${pagina}"] span`).textContent;
+            document.querySelector('.header-title h1').textContent = pageTitle;
+           
+            estado.paginaAtual = pagina;
+           
+            // Carregar dados específicos da página
+            carregarDadosTabelas();
+        }
+        // Atualizar interface baseada no perfil
+        function atualizarInterface() {
+            // Renderizar armários
+            if (estado.paginaAtual === 'dashboard') {
+                renderizarArmarios();
+            }
+        }
+        // Renderizar lista de armários no dashboard
+        function renderizarArmarios() {
+            elementos.armariosContainer.innerHTML = '';
+            const perfil = estado.perfilAtual;
+            const unidadeFiltro = estado.unidadeAtual;
+            let armariosParaExibir = estado.armarios.filter(a => {
+                const correspondePerfil = perfil === 'admin' || perfil === 'ambos' || a.tipo === perfil ||
+                    (perfil === 'visitante' && a.tipo === 'visitante') ||
+                    (perfil === 'acompanhante' && a.tipo === 'acompanhante');
+                const correspondeUnidade = unidadeFiltro === 'todas' || a.unidade === unidadeFiltro;
+                return correspondePerfil && correspondeUnidade;
+            });
+            // Aplicar filtro
+            if (estado.filtroAtual !== 'todos') {
+                armariosParaExibir = armariosParaExibir.filter(a => a.status === estado.filtroAtual);
+            }
+            armariosParaExibir.forEach(armario => {
+                const card = document.createElement('div');
+                card.className = `armario-card ${armario.status}`;
+                card.dataset.id = armario.id;
+                let detailsHTML = `
+                    <p class="armario-unidade">
+                        <span class="label">Unidade</span>
+                        <span class="value">${armario.unidade || '-'}</span>
+                    </p>
+                `;
+                if (armario.status === 'livre') {
+                    detailsHTML += '<p>Disponível para uso</p>';
+                } else {
+                    detailsHTML += `
+                        <p><strong>${armario.tipo === 'acompanhante' ? 'Acompanhante' : 'Visitante'}:</strong> ${armario.nomeVisitante}</p>
+                        <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
+                        <p><strong>Leito:</strong> ${armario.leito}</p>
+                        <p><strong>Volumes:</strong> ${armario.volumes}</p>
+                        <p><strong>Início:</strong> ${armario.horaInicio}</p>
+                        ${armario.horaPrevista ? `<p><strong>Previsão:</strong> ${armario.horaPrevista}</p>` : ''}
+                        ${armario.tipo === 'acompanhante' ? `<p><strong>Termo:</strong> ${armario.termoAplicado ? 'Aplicado' : 'Pendente'}</p>` : ''}
+                    `;
+                }
+                card.innerHTML = `
+                    <div class="armario-header">
+                        <div class="armario-number">${armario.numero}</div>
+                        <div class="armario-status status-${armario.status}">
+                            ${armario.status === 'livre' ? 'Livre' :
+                              armario.status === 'em-uso' ? 'Em uso' :
+                              armario.status === 'proximo' ? 'Próximo' : 'Vencido'}
+                        </div>
+                    </div>
+                    <div class="armario-details">
+                        ${detailsHTML}
+                    </div>
+                `;
+                card.addEventListener('click', () => abrirModalArmario(armario));
+                elementos.armariosContainer.appendChild(card);
+            });
+        }
+        // Carregar dados nas tabelas
+        async function carregarDadosTabelas() {
+            const unidadeFiltro = estado.unidadeAtual;
+            try {
+                // Carregar dados específicos da página atual
+                switch(estado.paginaAtual) {
+                    case 'visitantes':
+                        await carregarTabelaVisitantes(unidadeFiltro);
+                        break;
+                    case 'acompanhantes':
+                        await carregarTabelaAcompanhantes(unidadeFiltro);
+                        break;
+                    case 'historico-visitantes':
+                        await carregarHistoricoVisitantes();
+                        break;
+                    case 'historico-acompanhantes':
+                        await carregarHistoricoAcompanhantes();
+                        break;
+                    case 'termo-responsabilidade':
+                        await carregarTabelaTermos();
+                        break;
+                    case 'cadastro-armarios':
+                        await carregarCadastroArmarios(unidadeFiltro);
+                        break;
+                    case 'cadastro-unidades':
+                        renderizarTabelaUnidades();
+                        break;
+                    case 'usuarios':
+                        await carregarTabelaUsuarios();
+                        break;
+                    case 'logs':
+                        await carregarTabelaLogs();
+                        break;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dados da tabela:', error);
+                mostrarErro('Erro ao carregar dados');
+            }
+        }
+        async function carregarTabelaVisitantes(unidadeFiltro) {
+            const tbodyVisitantes = document.querySelector('#tabela-visitantes tbody');
+            if (!tbodyVisitantes) return;
+            const resultado = await callGoogleScript('getArmarios', { tipo: 'visitante' });
+            if (!resultado.success) return;
+            tbodyVisitantes.innerHTML = '';
+            resultado.data
+                .filter(a => unidadeFiltro === 'todas' || a.unidade === unidadeFiltro)
+                .forEach(armario => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${armario.numero}</td>
+                        <td>${armario.unidade || '-'}</td>
+                        <td><span class="armario-status status-${armario.status}">${formatarStatusArmario(armario.status)}</span></td>
+                        <td>${armario.nomeVisitante || '-'}</td>
+                        <td>${armario.nomePaciente || '-'}</td>
+                        <td>${armario.leito || '-'}</td>
+                        <td>${armario.volumes || '-'}</td>
+                        <td>${armario.horaInicio || '-'}</td>
+                        <td>${armario.horaPrevista || '-'}</td>
+                        <td>
+                            ${armario.status !== 'livre'
+                                ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="visitante">Liberar</button>`
+                                : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
+                            }
+                        </td>
+                    `;
+                    tbodyVisitantes.appendChild(tr);
+                });
+        }
+        async function carregarTabelaAcompanhantes(unidadeFiltro) {
+            const tbodyAcompanhantes = document.querySelector('#tabela-acompanhantes tbody');
+            if (!tbodyAcompanhantes) return;
+            const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
+            if (!resultado.success) return;
+            tbodyAcompanhantes.innerHTML = '';
+            resultado.data
+                .filter(a => unidadeFiltro === 'todas' || a.unidade === unidadeFiltro)
+                .forEach(armario => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${armario.numero}</td>
+                        <td>${armario.unidade || '-'}</td>
+                        <td><span class="armario-status status-${armario.status}">${formatarStatusArmario(armario.status)}</span></td>
+                        <td>${armario.nomeVisitante || '-'}</td>
+                        <td>${armario.nomePaciente || '-'}</td>
+                        <td>${armario.leito || '-'}</td>
+                        <td>${armario.volumes || '-'}</td>
+                        <td>${armario.horaInicio || '-'}</td>
+                        <td>
+                            ${armario.status !== 'livre'
+                                ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="acompanhante">Liberar</button>
+                                   <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                                   ${armario.termoAplicado ? '' : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`}`
+                                : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
+                            }
+                        </td>
+                    `;
+                    tbodyAcompanhantes.appendChild(tr);
+                });
+        }
+        async function carregarHistoricoVisitantes() {
+            const tbody = document.querySelector('#tabela-historico-visitantes tbody');
+            if (!tbody) return;
+            const resultado = await callGoogleScript('getHistorico', { tipo: 'visitante' });
+            if (!resultado.success) return;
+            tbody.innerHTML = '';
+            resultado.data.forEach(historico => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatarData(historico.data)}</td>
+                    <td>${historico.armario}</td>
+                    <td>${historico.nome}</td>
+                    <td>${historico.paciente}</td>
+                    <td>${historico.leito}</td>
+                    <td>${historico.volumes}</td>
+                    <td>${historico.horaInicio}</td>
+                    <td>${historico.horaFim}</td>
+                    <td>${historico.status}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        async function carregarHistoricoAcompanhantes() {
+            const tbody = document.querySelector('#tabela-historico-acompanhantes tbody');
+            if (!tbody) return;
+            const resultado = await callGoogleScript('getHistorico', { tipo: 'acompanhante' });
+            if (!resultado.success) return;
+            tbody.innerHTML = '';
+            resultado.data.forEach(historico => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatarData(historico.data)}</td>
+                    <td>${historico.armario}</td>
+                    <td>${historico.nome}</td>
+                    <td>${historico.paciente}</td>
+                    <td>${historico.leito}</td>
+                    <td>${historico.volumes}</td>
+                    <td>${historico.horaInicio}</td>
+                    <td>${historico.horaFim}</td>
+                    <td>${historico.status}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        async function carregarTabelaTermos() {
+            if (!elementos.tabelaTermosBody) return;
+            // Buscar armários de acompanhantes com termo aplicado
+            const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
+            if (!resultado.success) return;
+            elementos.tabelaTermosBody.innerHTML = '';
+           
+            const armariosComTermo = resultado.data.filter(a => a.status === 'em-uso' && a.termoAplicado);
+            if (!armariosComTermo.length) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="7" style="text-align:center; padding:16px; color:#5b6b86;">Nenhum termo ativo no momento.</td>';
+                elementos.tabelaTermosBody.appendChild(tr);
+                return;
+            }
+            // Para cada armário, buscar detalhes do termo
+            for (const armario of armariosComTermo) {
+                const tr = document.createElement('tr');
+               
+                // Buscar movimentações
+                const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
+                const numMovimentacoes = movResultado.success ? movResultado.data.length : 0;
+               
+                tr.innerHTML = `
+                    <td>${armario.numero}</td>
+                    <td>${armario.nomeVisitante || '-'}</td>
+                    <td>${armario.nomePaciente || '-'}</td>
+                    <td>${formatarData(armario.dataRegistro)}</td>
+                    <td>${numMovimentacoes} registro(s)</td>
+                    <td><a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a></td>
+                    <td>
+                        <button class="btn-small btn-primary" data-action="ver" data-id="${armario.id}">Ver termo</button>
+                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                        <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
+                    </td>
+                `;
+                elementos.tabelaTermosBody.appendChild(tr);
+            }
+        }
+        async function carregarCadastroArmarios(unidadeFiltro) {
+            const tbody = document.querySelector('#tabela-cadastro-armarios tbody');
+            if (!tbody) return;
+            const resultado = await callGoogleScript('getCadastroArmarios');
+            if (!resultado.success) return;
+            tbody.innerHTML = '';
+            resultado.data
+                .filter(armario => unidadeFiltro === 'todas' || armario.unidade === unidadeFiltro)
+                .forEach(armario => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${armario.id}</td>
+                        <td>${armario.numero}</td>
+                        <td>${armario.tipo === 'visitante' ? 'Visitante' : 'Acompanhante'}</td>
+                        <td>${armario.unidade || '-'}</td>
+                        <td>${armario.localizacao || '-'}</td>
+                        <td>${armario.status}</td>
+                        <td>
+                            <button class="btn-small btn-edit">Editar</button>
+                            <button class="btn-small btn-danger">Excluir</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+        }
+        async function carregarTabelaUsuarios() {
+            const tbody = document.querySelector('#tabela-usuarios tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            estado.usuarios.forEach(usuario => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${usuario.id}</td>
+                    <td>${usuario.nome}</td>
+                    <td>${usuario.email}</td>
+                    <td>${usuario.perfil === 'admin' ? 'Administrador' : 'Usuário'}</td>
+                    <td>${usuario.acessoVisitantes ? 'Sim' : 'Não'}</td>
+                    <td>${usuario.acessoAcompanhantes ? 'Sim' : 'Não'}</td>
+                    <td>
+                        <button class="btn-small btn-edit">Editar</button>
+                        <button class="btn-small btn-danger">Excluir</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        async function carregarTabelaLogs() {
+            const tbody = document.querySelector('#tabela-logs tbody');
+            if (!tbody) return;
+            const resultado = await callGoogleScript('getLogs');
+            if (!resultado.success) return;
+            tbody.innerHTML = '';
+            resultado.data.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatarDataHora(log.dataHora)}</td>
+                    <td>${log.usuario}</td>
+                    <td>${log.acao}</td>
+                    <td>${log.detalhes}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        function atualizarSeletoresUnidade() {
+            if (!elementos.unitSelect) return;
+            const valorAtual = estado.unidadeAtual || 'todas';
+            const opcoes = estado.unidades.map(unidade => {
+                const desativada = unidade.status !== 'ativa';
+                const label = desativada ? `${unidade.nome} (inativa)` : unidade.nome;
+                return `<option value="${unidade.nome}" ${desativada ? 'disabled' : ''}>${label}</option>`;
+            }).join('');
+            elementos.unitSelect.innerHTML = `
+                <option value="todas">Todas as unidades</option>
+                ${opcoes}
+            `;
+            const valoresDisponiveis = Array.from(elementos.unitSelect.options).map(option => option.value);
+            if (valoresDisponiveis.includes(valorAtual)) {
+                elementos.unitSelect.value = valorAtual;
+            } else {
+                elementos.unitSelect.value = 'todas';
+                estado.unidadeAtual = 'todas';
+            }
+        }
+        function renderizarTabelaUnidades() {
+            if (!elementos.tabelaUnidadesBody) return;
+            elementos.tabelaUnidadesBody.innerHTML = '';
+            estado.unidades.forEach(unidade => {
+                const totalArmarios = estado.cadastroArmarios.filter(armario => armario.unidade === unidade.nome).length;
+                const statusClasse = unidade.status === 'ativa' ? 'status-livre' : 'status-vencido';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${unidade.id}</td>
+                    <td>${unidade.nome}</td>
+                    <td><span class="armario-status ${statusClasse}">${unidade.status === 'ativa' ? 'Ativa' : 'Inativa'}</span></td>
+                    <td>${totalArmarios}</td>
+                    <td>
+                        <button class="btn-small btn-primary" data-acao-unidade="filtrar" data-unidade="${unidade.nome}">Ver armários</button>
+                        <button class="btn-small ${unidade.status === 'ativa' ? 'btn-edit' : 'btn-secondary'}" data-acao-unidade="alternar" data-unidade="${unidade.nome}">${unidade.status === 'ativa' ? 'Desativar' : 'Ativar'}</button>
+                    </td>
+                `;
+                elementos.tabelaUnidadesBody.appendChild(tr);
+            });
+        }
+        function tratarAcaoUnidade(evento) {
+            const botao = evento.target.closest('button[data-acao-unidade]');
+            if (!botao) return;
+            const unidade = botao.dataset.unidade;
+            const acao = botao.dataset.acaoUnidade;
+            if (acao === 'filtrar') {
+                selecionarUnidade(unidade);
+                navegarParaPagina('cadastro-armarios');
+            } else if (acao === 'alternar') {
+                alternarStatusUnidade(unidade);
+            }
+        }
+        function selecionarUnidade(unidade) {
+            estado.unidadeAtual = unidade || 'todas';
+            if (elementos.unitSelect) {
+                const existe = Array.from(elementos.unitSelect.options).some(option => option.value === estado.unidadeAtual);
+                elementos.unitSelect.value = existe ? estado.unidadeAtual : 'todas';
+                if (!existe) {
+                    estado.unidadeAtual = 'todas';
+                }
+            }
+            atualizarInterface();
+            carregarDadosTabelas();
+        }
+        async function alternarStatusUnidade(nome) {
+            const unidade = estado.unidades.find(u => u.nome === nome);
+            if (!unidade) return;
+            const resultado = await callGoogleScript('alternarStatusUnidade', { nome });
+            if (resultado.success) {
+                unidade.status = unidade.status === 'ativa' ? 'inativa' : 'ativa';
+                if (unidade.status === 'inativa' && estado.unidadeAtual === nome) {
+                    estado.unidadeAtual = 'todas';
+                }
+                atualizarSeletoresUnidade();
+                renderizarTabelaUnidades();
+                carregarDadosTabelas();
+                atualizarInterface();
+                await Swal.fire({
+                    title: 'Unidade atualizada',
+                    text: `A unidade ${nome} agora está ${unidade.status === 'ativa' ? 'ativa' : 'inativa'}.`,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        async function abrirModalNovaUnidade() {
+            const { value: nomeUnidade, isConfirmed } = await Swal.fire({
+                title: 'Nova Unidade',
+                input: 'text',
+                inputLabel: 'Nome da unidade',
+                inputPlaceholder: 'Ex.: NAC Eletiva',
+                showCancelButton: true,
+                confirmButtonText: 'Salvar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Informe o nome da unidade';
+                    }
+                    return null;
+                }
+            });
+            if (!isConfirmed || !nomeUnidade || !nomeUnidade.trim()) {
+                return;
+            }
+            const nome = nomeUnidade.trim();
+            const resultado = await callGoogleScript('cadastrarUnidade', { nome });
+            if (resultado.success) {
+                estado.unidades.push({
+                    id: resultado.id,
+                    nome,
+                    status: 'ativa',
+                    dataCadastro: new Date()
+                });
+                atualizarSeletoresUnidade();
+                renderizarTabelaUnidades();
+                await Swal.fire({
+                    title: 'Sucesso!',
+                    text: 'Unidade cadastrada com sucesso',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        // Abrir modal para cadastro/edição de armário
+        function abrirModalArmario(armario) {
+            if (armario.status === 'livre') {
+                elementos.modalTitle.textContent = `Cadastrar Armário ${armario.numero}`;
+                elementos.armarioForm.reset();
+                elementos.nomeVisitanteLabel.textContent =
+                    armario.tipo === 'visitante' ? 'Nome do Visitante' : 'Nome do Acompanhante';
+                document.getElementById('nome-visitante').placeholder =
+                    armario.tipo === 'visitante' ? 'Nome do visitante' : 'Nome do acompanhante';
+                const exigeHoraPrevista = armario.tipo === 'visitante';
+                elementos.horaPrevistaGroup.style.display = exigeHoraPrevista ? 'block' : 'none';
+                elementos.horaPrevistaInput.required = exigeHoraPrevista;
+                elementos.horaPrevistaInput.disabled = !exigeHoraPrevista;
+                if (!exigeHoraPrevista) {
+                    elementos.horaPrevistaInput.value = '';
+                }
+                elementos.armarioForm.dataset.modo = 'cadastro';
+                elementos.armarioForm.dataset.id = armario.id;
+                elementos.armarioForm.dataset.tipo = armario.tipo;
+                elementos.armarioModal.style.display = 'flex';
+            } else {
+                const termoHtml = armario.tipo === 'acompanhante'
+                    ? `<div class="info-box" style="margin-top:12px;">Termo de responsabilidade: <strong>${armario.termoAplicado ? 'Aplicado' : 'Pendente'}</strong>${armario.termoAplicado ? '' : '<br><small>Finalize o termo antes da primeira movimentação.</small>'}</div>`
+                    : '';
+                Swal.fire({
+                    title: `Armário ${armario.numero}`,
+                    html: `
+                        <p><strong>Status:</strong> ${formatarStatusArmario(armario.status)}</p>
+                        <p class="armario-unidade">
+                            <span class="label">Unidade</span>
+                            <span class="value">${armario.unidade || '-'}</span>
+                        </p>
+                        <p><strong>${armario.tipo === 'acompanhante' ? 'Acompanhante' : 'Visitante'}:</strong> ${armario.nomeVisitante}</p>
+                        <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
+                        <p><strong>Leito:</strong> ${armario.leito}</p>
+                        <p><strong>Volumes:</strong> ${armario.volumes}</p>
+                        <p><strong>Início:</strong> ${armario.horaInicio}</p>
+                        ${armario.horaPrevista ? `<p><strong>Previsão de saída:</strong> ${armario.horaPrevista}</p>` : ''}
+                        ${termoHtml}
+                        ${armario.tipo === 'acompanhante' && !armario.termoAplicado ? '<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">Aplicar termo agora</button></div>' : ''}
+                    `,
+                    icon: 'info',
+                    showCancelButton: true,
+                    showDenyButton: armario.tipo === 'acompanhante',
+                    confirmButtonText: 'Liberar Armário',
+                    denyButtonText: 'Movimentações',
+                    cancelButtonText: 'Fechar',
+                    confirmButtonColor: '#28a745',
+                    reverseButtons: true,
+                    didOpen: () => {
+                        if (armario.tipo === 'acompanhante' && !armario.termoAplicado) {
+                            const btn = Swal.getHtmlContainer().querySelector('#btn-aplicar-termo');
+                            if (btn) {
+                                btn.addEventListener('click', () => {
+                                    Swal.close();
+                                    abrirTermoWizard(armario.id);
+                                });
+                            }
+                        }
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        abrirModalLiberacao(armario.id, armario.tipo);
+                    } else if (result.isDenied) {
+                        abrirMovimentacoes(armario.id);
+                    }
+                });
+            }
+        }
+        // Abrir modal para novo armário
+        async function abrirModalNovoArmario(tipo) {
+            // Buscar armários livres do tipo especificado
+            const resultado = await callGoogleScript('getArmarios', { tipo });
+            if (!resultado.success) {
+                mostrarErro('Erro ao buscar armários');
+                return;
+            }
+            const armarioLivre = resultado.data.find(a => a.status === 'livre');
+            if (armarioLivre) {
+                abrirModalArmario(armarioLivre);
+            } else {
+                await Swal.fire({
+                    title: 'Sem armários disponíveis',
+                    text: `Não há armários ${tipo === 'visitante' ? 'de visitantes' : 'de acompanhantes'} disponíveis no momento.`,
+                    icon: 'warning',
+                    confirmButtonText: 'OK'
+                });
+            }
+        }
+        // Abrir modal para novo armário físico
+        async function abrirModalNovoArmarioFisico() {
+            if (!estado.unidades.length) {
+                await Swal.fire({
+                    title: 'Nenhuma unidade cadastrada',
+                    text: 'Cadastre uma unidade antes de adicionar novos armários.',
+                    icon: 'warning',
+                    confirmButtonText: 'OK'
+                });
+                return;
+            }
+            const opcoesUnidades = estado.unidades.map(unidade => {
+                const selecionada = estado.unidadeAtual === unidade.nome ? 'selected' : '';
+                return `<option value="${unidade.nome}" ${selecionada}>${unidade.nome}</option>`;
+            }).join('');
+            const resultado = await Swal.fire({
+                title: 'Cadastro de Armários Físicos',
+                html: `
+                    <div class="swal-form-grid">
+                        <div class="swal-form-section">
+                            <div class="swal-form-section-title"><i class="fas fa-info-circle"></i>Informações gerais</div>
+                            <div class="swal-form-fields">
+                                <div class="swal-form-group">
+                                    <label for="tipo-armario">Tipo de armário</label>
+                                    <select id="tipo-armario" class="swal2-input">
+                                        <option value="visitante">Visitante</option>
+                                        <option value="acompanhante">Acompanhante</option>
+                                    </select>
+                                </div>
+                                <div class="swal-form-group">
+                                    <label for="unidade-armario">Unidade responsável</label>
+                                    <select id="unidade-armario" class="swal2-input">
+                                        ${opcoesUnidades}
+                                    </select>
+                                </div>
+                                <div class="swal-form-group">
+                                    <label for="localizacao-armario">Localização física</label>
+                                    <input type="text" id="localizacao-armario" class="swal2-input" placeholder="Ex.: Bloco A - Térreo ou Sala 102">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="swal-form-section">
+                            <div class="swal-form-section-title"><i class="fas fa-list-ol"></i>Numeração dos armários</div>
+                            <div class="swal-form-fields two-columns">
+                                <div class="swal-form-group">
+                                    <label for="quantidade-armarios">Quantidade a cadastrar</label>
+                                    <input type="number" id="quantidade-armarios" class="swal2-input" min="1" value="1" placeholder="Quantidade de armários">
+                                </div>
+                                <div class="swal-form-group">
+                                    <label for="numero-armario">Número único</label>
+                                    <input type="text" id="numero-armario" class="swal2-input" placeholder="Informe apenas se cadastrar 1 armário">
+                                </div>
+                                <div class="swal-form-group">
+                                    <label for="prefixo-armario">Prefixo</label>
+                                    <input type="text" id="prefixo-armario" class="swal2-input" placeholder="Ex.: UIB-V (usado para lotes)">
+                                </div>
+                                <div class="swal-form-group">
+                                    <label for="inicio-armario">Início da numeração</label>
+                                    <input type="number" id="inicio-armario" class="swal2-input" min="1" value="1" placeholder="Primeiro número do lote">
+                                </div>
+                            </div>
+                            <div class="swal-form-hint">
+                                Para cadastrar apenas um armário, preencha <strong>Número único</strong>. Para criar vários de uma vez, informe a <strong>Quantidade</strong>, o <strong>Prefixo</strong> e o <strong>Início da numeração</strong>.
+                            </div>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Cadastrar',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    const popup = Swal.getPopup();
+                    const tipo = popup.querySelector('#tipo-armario').value;
+                    const unidade = popup.querySelector('#unidade-armario').value;
+                    const localizacao = popup.querySelector('#localizacao-armario').value.trim();
+                    const quantidadeValor = parseInt(popup.querySelector('#quantidade-armarios').value, 10);
+                    const numero = popup.querySelector('#numero-armario').value.trim();
+                    const prefixo = popup.querySelector('#prefixo-armario').value.trim();
+                    const inicioValor = parseInt(popup.querySelector('#inicio-armario').value, 10);
+                    if (!unidade) {
+                        Swal.showValidationMessage('Selecione a unidade');
+                        return false;
+                    }
+                    if (!localizacao) {
+                        Swal.showValidationMessage('Informe a localização dos armários');
+                        return false;
+                    }
+                    const quantidade = Number.isNaN(quantidadeValor) ? 1 : Math.max(1, quantidadeValor);
+                    const numeroInicial = Number.isNaN(inicioValor) ? 1 : Math.max(1, inicioValor);
+                    if (quantidade > 1 && !prefixo) {
+                        Swal.showValidationMessage('Informe um prefixo para gerar vários armários');
+                        return false;
+                    }
+                    if (quantidade === 1 && !numero && !prefixo) {
+                        Swal.showValidationMessage('Informe o número ou um prefixo para gerar a numeração');
+                        return false;
+                    }
+                    return { tipo, unidade, localizacao, quantidade, numero, prefixo, numeroInicial };
+                }
+            });
+            if (!resultado.isConfirmed || !resultado.value) {
+                return;
+            }
+            const dados = resultado.value;
+            const cadastroResultado = await callGoogleScript('cadastrarArmarioFisico', dados);
+            if (cadastroResultado.success) {
+                // Recarregar dados
+                await carregarArmarios();
+                await carregarEstatisticas();
+                atualizarInterface();
+                carregarDadosTabelas();
+                await Swal.fire({
+                    title: 'Sucesso!',
+                    text: `${cadastroResultado.numeros.length} armário(s) cadastrados: ${cadastroResultado.numeros.join(', ')}`,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+            } else {
+                mostrarErro(cadastroResultado.error);
+            }
+        }
+        // Abrir modal para novo usuário
+        function abrirModalNovoUsuario() {
+            elementos.usuarioForm.reset();
+            document.getElementById('usuario-modal-title').textContent = 'Cadastrar Usuário';
+            elementos.usuarioModal.style.display = 'flex';
+        }
+        // Fechar modais
+        function fecharModalArmario() {
+            elementos.armarioModal.style.display = 'none';
+        }
+        function fecharModalUsuario() {
+            elementos.usuarioModal.style.display = 'none';
+        }
+        // Salvar armário (cadastro)
+        async function salvarArmario() {
+            const id = parseInt(elementos.armarioForm.dataset.id);
+            const tipo = elementos.armarioForm.dataset.tipo || 'visitante';
+            const dados = {
+                id: id,
+                nomeVisitante: document.getElementById('nome-visitante').value.trim(),
+                nomePaciente: document.getElementById('nome-paciente').value.trim(),
+                leito: document.getElementById('leito').value.trim(),
+                volumes: parseInt(document.getElementById('volumes').value, 10),
+                horaPrevista: tipo === 'visitante' ? document.getElementById('hora-prevista').value : '',
+                tipo: tipo
+            };
+            const resultado = await callGoogleScript('cadastrarArmario', dados);
+            if (resultado.success) {
+                fecharModalArmario();
+               
+                // Recarregar dados
+                await carregarArmarios();
+                await carregarEstatisticas();
+                atualizarInterface();
+                carregarDadosTabelas();
+                if (tipo === 'acompanhante') {
+                    abrirTermoWizard(resultado.id);
+                } else {
+                    mostrarSucesso('Armário cadastrado com sucesso');
+                }
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        // Salvar usuário
+        async function salvarUsuario() {
+            const dados = {
+                nome: document.getElementById('usuario-nome').value.trim(),
+                email: document.getElementById('usuario-email').value.trim(),
+                perfil: document.getElementById('usuario-perfil').value,
+                acessoVisitantes: document.getElementById('acesso-visitantes').checked,
+                acessoAcompanhantes: document.getElementById('acesso-acompanhantes').checked
+            };
+            const resultado = await callGoogleScript('cadastrarUsuario', dados);
+            if (resultado.success) {
+                fecharModalUsuario();
+                mostrarSucesso('Usuário cadastrado com sucesso');
+               
+                // Recarregar usuários
+                await carregarUsuarios();
+                carregarDadosTabelas();
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        // Liberar armário
+        async function liberarArmario(id, tipo) {
+            const resultado = await callGoogleScript('liberarArmario', { id, tipo });
+            if (resultado.success) {
+                await carregarArmarios();
+                await carregarEstatisticas();
+                atualizarInterface();
+                carregarDadosTabelas();
+                mostrarSucesso('Armário liberado com sucesso');
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        function formatarStatusArmario(status) {
+            switch (status) {
+                case 'em-uso':
+                    return 'Em uso';
+                case 'proximo':
+                    return 'Próximo do horário';
+                case 'vencido':
+                    return 'Vencido';
+                default:
+                    return 'Livre';
+            }
+        }
+        function formatarData(valor) {
+            if (!valor) return '-';
+            try {
+                const data = new Date(valor);
+                if (Number.isNaN(data.getTime())) {
+                    return valor;
+                }
+                return data.toLocaleDateString('pt-BR');
+            } catch {
+                return valor;
+            }
+        }
+        function formatarDataHora(valor) {
+            if (!valor) return '-';
+            try {
+                const data = new Date(valor);
+                if (Number.isNaN(data.getTime())) {
+                    return valor;
+                }
+                return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            } catch {
+                return valor;
+            }
+        }
+        function obterArmarioPorId(id) {
+            return estado.armarios.find(a => a.id === id);
+        }
+        function usarArmario(id) {
+            const armario = obterArmarioPorId(id);
+            if (armario) {
+                abrirModalArmario(armario);
+            }
+        }
+        function abrirTermoDireto(id) {
+            abrirTermoWizard(id);
+        }
+        function abrirTermoWizard(id) {
+            const armario = obterArmarioPorId(id);
+            if (!armario) return;
+            termoArmarioAtual = id;
+            elementos.termoArmario.textContent = armario.numero;
+            elementos.termoForm.reset();
+            elementos.termoForm.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
+            document.getElementById('termo-paciente').value = armario.nomePaciente || '';
+            document.getElementById('termo-leito').value = armario.leito || '';
+            document.getElementById('termo-resp-nome').value = armario.nomeVisitante || '';
+            prepararVolumesTermo();
+            mostrarPassoTermo(0);
+            elementos.termoModal.style.display = 'flex';
+        }
+        function mostrarPassoTermo(indice) {
+            termoSteps.forEach((step, idx) => step.classList.toggle('active', idx === indice));
+            termoPassoAtual = indice;
+            const total = termoSteps.length;
+            elementos.termoBtnVoltar.disabled = indice === 0;
+            elementos.termoBtnAvancar.textContent = indice === total - 1 ? 'Aplicar termo' : 'Avançar';
+            const progresso = ((indice + 1) / total) * 100;
+            elementos.termoProgress.style.width = `${progresso}%`;
+            elementos.termoProgressLabel.textContent = `Passo ${indice + 1} de ${total}`;
+        }
+        function marcarCampoTermoInvalido(elemento) {
+            const field = elemento.closest('.wizard-field') || elemento.closest('.wizard-chip')?.closest('.wizard-field');
+            if (field) {
+                field.classList.add('invalid');
+            }
+        }
+        function validarPassoTermo(indice) {
+            const step = termoSteps[indice];
+            if (!step) return true;
+            step.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
+            const inputs = step.querySelectorAll('input[required], textarea[required], select[required]');
+            let valido = true;
+            inputs.forEach(input => {
+                if (input.type === 'radio') {
+                    const radios = step.querySelectorAll(`input[type="radio"][name="${input.name}"]`);
+                    const algumMarcado = Array.from(radios).some(radio => radio.checked);
+                    if (!algumMarcado) {
+                        marcarCampoTermoInvalido(input);
+                        valido = false;
+                    }
+                } else if (input.type === 'checkbox') {
+                    if (!input.checked) {
+                        marcarCampoTermoInvalido(input);
+                        valido = false;
+                    }
+                } else {
+                    if (!input.value.trim()) {
+                        marcarCampoTermoInvalido(input);
+                        valido = false;
+                    }
+                }
+            });
+            if (step.contains(elementos.termoVolumesField) && !validarVolumesTermo()) {
+                valido = false;
+            }
+            return valido;
+        }
+        function prepararVolumesTermo(volumes = []) {
+            if (!elementos.termoVolumesList) return;
+            elementos.termoVolumesList.innerHTML = '';
+            if (Array.isArray(volumes) && volumes.length) {
+                volumes.forEach(volume => adicionarVolumeTermo(volume));
+            } else {
+                adicionarVolumeTermo();
+            }
+            atualizarRemocaoVolumesTermo();
+            elementos.termoVolumesField?.classList.remove('invalid');
+        }
+        function criarVolumeItemTermo(dados = {}) {
+            const item = document.createElement('div');
+            item.className = 'wizard-volume-item';
+            const grid = document.createElement('div');
+            grid.className = 'wizard-volume-grid';
+            const colQtd = document.createElement('div');
+            colQtd.className = 'wizard-volume-col';
+            const labelQtd = document.createElement('label');
+            labelQtd.textContent = 'Quantidade';
+            const inputQtd = document.createElement('input');
+            inputQtd.type = 'number';
+            inputQtd.min = '1';
+            inputQtd.placeholder = 'Qtd.';
+            inputQtd.className = 'wizard-input termo-volume-qty';
+            if (dados.quantidade !== undefined && dados.quantidade !== null && dados.quantidade !== '') {
+                inputQtd.value = dados.quantidade;
+            }
+            const colDesc = document.createElement('div');
+            colDesc.className = 'wizard-volume-col';
+            const labelDesc = document.createElement('label');
+            labelDesc.textContent = 'Descrição';
+            const inputDesc = document.createElement('input');
+            inputDesc.type = 'text';
+            inputDesc.placeholder = 'Ex.: mochila azul';
+            inputDesc.className = 'wizard-input termo-volume-desc';
+            if (dados.descricao) {
+                inputDesc.value = dados.descricao;
+            }
+            const actions = document.createElement('div');
+            actions.className = 'wizard-volume-actions';
+            const remover = document.createElement('button');
+            remover.type = 'button';
+            remover.className = 'btn btn-secondary btn-remove-volume';
+            remover.textContent = 'Remover';
+            actions.appendChild(remover);
+            colQtd.appendChild(labelQtd);
+            colQtd.appendChild(inputQtd);
+            colDesc.appendChild(labelDesc);
+            colDesc.appendChild(inputDesc);
+            grid.appendChild(colQtd);
+            grid.appendChild(colDesc);
+            grid.appendChild(actions);
+            item.appendChild(grid);
+            return item;
+        }
+        function adicionarVolumeTermo(dados = {}) {
+            if (!elementos.termoVolumesList) return null;
+            const item = criarVolumeItemTermo(dados);
+            elementos.termoVolumesList.appendChild(item);
+            atualizarRemocaoVolumesTermo();
+            elementos.termoVolumesField?.classList.remove('invalid');
+            return item;
+        }
+        function removerVolumeTermo(item) {
+            if (!item || !elementos.termoVolumesList) return;
+            item.remove();
+            if (!elementos.termoVolumesList.querySelector('.wizard-volume-item')) {
+                adicionarVolumeTermo();
+            }
+            atualizarRemocaoVolumesTermo();
+        }
+        function atualizarRemocaoVolumesTermo() {
+            if (!elementos.termoVolumesList) return;
+            const itens = Array.from(elementos.termoVolumesList.querySelectorAll('.wizard-volume-item'));
+            itens.forEach(item => {
+                const botao = item.querySelector('.btn-remove-volume');
+                if (botao) {
+                    botao.style.display = itens.length === 1 ? 'none' : '';
+                }
+                const campoQtd = item.querySelector('.termo-volume-qty');
+                const campoDesc = item.querySelector('.termo-volume-desc');
+                if (campoQtd && !campoQtd.hasAttribute('required')) {
+                    campoQtd.setAttribute('required', 'required');
+                }
+                if (campoDesc && !campoDesc.hasAttribute('required')) {
+                    campoDesc.setAttribute('required', 'required');
+                }
+            });
+        }
+        function obterVolumesTermo() {
+            if (!elementos.termoVolumesList) return [];
+            return Array.from(elementos.termoVolumesList.querySelectorAll('.wizard-volume-item')).map(item => {
+                const quantidadeValor = item.querySelector('.termo-volume-qty')?.value || '';
+                const descricaoValor = item.querySelector('.termo-volume-desc')?.value.trim() || '';
+                const quantidade = quantidadeValor ? parseInt(quantidadeValor, 10) : 0;
+                return {
+                    quantidade: Number.isNaN(quantidade) ? 0 : quantidade,
+                    descricao: descricaoValor
+                };
+            });
+        }
+        function validarVolumesTermo() {
+            if (!elementos.termoVolumesField) return true;
+            const volumes = obterVolumesTermo();
+            const todosValidos = volumes.length > 0 && volumes.every(volume => volume.quantidade > 0 && volume.descricao);
+            if (!todosValidos) {
+                elementos.termoVolumesField.classList.add('invalid');
+                return false;
+            }
+            elementos.termoVolumesField.classList.remove('invalid');
+            return true;
+        }
+        function navegarPassoTermo(delta) {
+            const novoIndice = termoPassoAtual + delta;
+            if (novoIndice >= 0 && novoIndice < termoSteps.length) {
+                mostrarPassoTermo(novoIndice);
+            }
+        }
+        function avancarOuAplicarTermo() {
+            if (!validarPassoTermo(termoPassoAtual)) {
+                return;
+            }
+            if (termoPassoAtual < termoSteps.length - 1) {
+                mostrarPassoTermo(termoPassoAtual + 1);
+            } else {
+                aplicarTermo();
+            }
+        }
+        async function aplicarTermo() {
+            if (termoArmarioAtual === null) return;
+            // Capturar a assinatura do canvas
+            const canvas = document.getElementById('signature-canvas');
+            const assinaturaBase64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+            const volumes = obterVolumesTermo();
+            const descricaoVolumes = volumes.map(v => `${v.quantidade}x ${v.descricao}`).join('; ');
+            const dadosTermo = {
+                armarioId: termoArmarioAtual,
+                numeroArmario: document.getElementById('termo-armario').textContent,
+                paciente: document.getElementById('termo-paciente').value.trim(),
+                prontuario: document.getElementById('termo-prontuario').value.trim(),
+                nascimento: document.getElementById('termo-nascimento').value,
+                setor: document.getElementById('termo-setor').value.trim(),
+                leito: document.getElementById('termo-leito').value.trim(),
+                consciente: document.querySelector('input[name="termo-consciente"]:checked')?.value || '',
+                acompanhante: document.getElementById('termo-resp-nome').value.trim(),
+                telefone: document.getElementById('termo-resp-telefone').value.trim(),
+                documento: document.getElementById('termo-resp-doc').value.trim(),
+                parentesco: document.getElementById('termo-resp-parentesco').value.trim(),
+                orientacoes: ['ori1', 'ori2', 'ori3'].filter(chave => document.getElementById(`termo-${chave}`).checked),
+                volumes: volumes,
+                descricaoVolumes: descricaoVolumes,
+                assinaturaBase64: assinaturaBase64
+            };
+            const resultado = await callGoogleScript('salvarTermoCompleto', dadosTermo);
+            if (resultado.success) {
+                fecharTermoModal();
+               
+                // Recarregar dados
+                await carregarArmarios();
+                await carregarEstatisticas();
+                atualizarInterface();
+                carregarDadosTabelas();
+                mostrarSucesso('Termo aplicado com sucesso e PDF gerado');
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        function fecharTermoModal() {
+            elementos.termoModal.style.display = 'none';
+            termoArmarioAtual = null;
+            mostrarPassoTermo(0);
+            elementos.termoForm.reset();
+            elementos.termoForm.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
+            prepararVolumesTermo();
+        }
+        async function abrirMovimentacoes(id) {
+            const armario = obterArmarioPorId(id);
+            if (!armario) return;
+            movimentacaoArmarioAtual = id;
+            elementos.movimentacaoModalTitle.textContent = `Movimentações - Armário ${armario.numero}`;
+            elementos.movimentacaoForm.reset();
+            const agora = new Date();
+            const iso = agora.toISOString();
+            elementos.movData.value = iso.slice(0, 10);
+            elementos.movHora.value = iso.slice(11, 16);
+            await renderizarMovimentacoes(id);
+            elementos.movimentacaoModal.style.display = 'flex';
+        }
+        function fecharMovimentacaoModal() {
+            elementos.movimentacaoModal.style.display = 'none';
+            movimentacaoArmarioAtual = null;
+        }
+        function formatarTituloMovimento(tipo) {
+            const mapa = {
+                entrada: 'Entrada de pertences',
+                saida: 'Saída de pertences',
+                conferencia: 'Conferência'
+            };
+            return mapa[tipo] || tipo;
+        }
+        async function renderizarMovimentacoes(id) {
+            const resultado = await callGoogleScript('getMovimentacoes', { armarioId: id });
+            if (!resultado.success) return;
+            const lista = resultado.data;
+            elementos.movimentacoesList.innerHTML = '';
+            if (!lista.length) {
+                const vazio = document.createElement('div');
+                vazio.className = 'info-box';
+                vazio.textContent = 'Nenhuma movimentação registrada até o momento.';
+                elementos.movimentacoesList.appendChild(vazio);
+                return;
+            }
+            lista.forEach(item => {
+                const bloco = document.createElement('div');
+                bloco.className = 'movimentacao-item';
+                bloco.innerHTML = `
+                    <div class="movimentacao-header">
+                        <span>${formatarTituloMovimento(item.tipo)}</span>
+                        <span>${formatarData(item.data)} ${item.hora}</span>
+                    </div>
+                    <div class="movimentacao-meta">
+                        <span><strong>Descrição:</strong> ${item.descricao}</span>
+                        <span><strong>Responsável:</strong> ${item.responsavel}</span>
+                    </div>
+                `;
+                elementos.movimentacoesList.appendChild(bloco);
+            });
+        }
+        async function salvarMovimentacao() {
+            if (!movimentacaoArmarioAtual) return;
+            const dados = {
+                armarioId: movimentacaoArmarioAtual,
+                tipo: elementos.movTipo.value,
+                descricao: elementos.movDescricao.value.trim(),
+                responsavel: elementos.movResponsavel.value.trim(),
+                data: elementos.movData.value,
+                hora: elementos.movHora.value
+            };
+            const resultado = await callGoogleScript('salvarMovimentacao', dados);
+            if (resultado.success) {
+                await renderizarMovimentacoes(movimentacaoArmarioAtual);
+                mostrarSucesso('Movimentação registrada com sucesso');
+                elementos.movimentacaoForm.reset();
+                elementos.movTipo.value = '';
+                const agora = new Date();
+                const iso = agora.toISOString();
+                elementos.movData.value = iso.slice(0, 10);
+                elementos.movHora.value = iso.slice(11, 16);
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        function tratarAcaoTermo(evento) {
+            const botao = evento.target.closest('button[data-action]');
+            if (!botao) return;
+            const id = parseInt(botao.dataset.id, 10);
+            if (Number.isNaN(id)) return;
+            switch (botao.dataset.action) {
+                case 'ver':
+                    exibirResumoTermo(id);
+                    break;
+                case 'mov':
+                    abrirMovimentacoes(id);
+                    break;
+                case 'encerrar':
+                    abrirModalLiberacao(id, 'acompanhante');
+                    break;
+                case 'ver-pdf':
+                    evento.preventDefault();
+                    verPDFTermo(id);
+                    break;
+                default:
+                    break;
+            }
+        }
+        async function exibirResumoTermo(id) {
+            const armario = obterArmarioPorId(id);
+            if (!armario) {
+                mostrarErro('Armário não encontrado');
+                return;
+            }
+            // Buscar detalhes do termo
+            const resultado = await callGoogleScript('getTermo', { armarioId: id });
+            if (!resultado.success) {
+                mostrarErro('Termo não encontrado');
+                return;
+            }
+            const termo = resultado.data;
+            const html = `
+                <p><strong>Paciente:</strong> ${termo.paciente}</p>
+                <p><strong>Prontuário:</strong> ${termo.prontuario}</p>
+                <p><strong>Setor:</strong> ${termo.setor}</p>
+                <p><strong>Leito:</strong> ${termo.leito}</p>
+                <p><strong>Acompanhante:</strong> ${termo.acompanhante}</p>
+                ${termo.telefone ? `<p><strong>Telefone:</strong> ${termo.telefone}</p>` : ''}
+                ${termo.documento ? `<p><strong>Documento:</strong> ${termo.documento}</p>` : ''}
+                ${termo.parentesco ? `<p><strong>Parentesco:</strong> ${termo.parentesco}</p>` : ''}
+                <p><strong>Volumes:</strong> ${termo.descricaoVolumes}</p>
+                <p><strong>Aplicado em:</strong> ${formatarDataHora(termo.aplicadoEm)}</p>
+            `;
+            Swal.fire({
+                title: `Termo - Armário ${armario.numero}`,
+                html,
+                icon: 'info',
+                confirmButtonText: 'Fechar'
+            });
+        }
+        async function verPDFTermo(id) {
+            const resultado = await callGoogleScript('getTermo', { armarioId: id });
+            if (resultado.success && resultado.data.pdfUrl) {
+                window.open(resultado.data.pdfUrl, '_blank');
+            } else {
+                mostrarErro('PDF não disponível para este termo');
+            }
+        }
+        async function abrirModalLiberacao(id, tipo) {
+            const armario = obterArmarioPorId(id);
+            if (!armario || armario.status === 'livre') return;
+            liberacaoArmarioAtual = id;
+            elementos.liberacaoArmario.textContent = armario.numero;
+            elementos.liberacaoDetalhes.innerHTML = `
+                <p><strong>${armario.tipo === 'acompanhante' ? 'Acompanhante' : 'Visitante'}:</strong> ${armario.nomeVisitante}</p>
+                <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
+                <p><strong>Leito:</strong> ${armario.leito}</p>
+                <p><strong>Volumes:</strong> ${armario.volumes}</p>
+            `;
+            elementos.liberacaoSlider.value = 0;
+            elementos.liberacaoCheckbox.checked = false;
+            elementos.cpfConfirmacao.value = '';
+            assinaturaDesenhada = false;
+            desenhandoAssinatura = false;
+            elementos.liberacaoBtnConfirmar.disabled = true;
+            elementos.liberacaoData.textContent = new Date().toLocaleDateString('pt-BR');
+            elementos.liberacaoMetodoRadios.forEach(radio => {
+                radio.checked = radio.value === 'assinatura';
+            });
+            elementos.liberacaoModal.style.display = 'flex';
+            alternarMetodoLiberacao();
+        }
+        function fecharModalLiberacao() {
+            elementos.liberacaoModal.style.display = 'none';
+            liberacaoArmarioAtual = null;
+        }
+        function alternarMetodoLiberacao() {
+            const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
+            if (metodo === 'assinatura') {
+                elementos.assinaturaArea.style.display = 'block';
+                elementos.cpfArea.style.display = 'none';
+                limparAssinatura();
+            } else {
+                elementos.assinaturaArea.style.display = 'none';
+                elementos.cpfArea.style.display = 'block';
+            }
+            atualizarEstadoLiberacao();
+        }
+        function limparAssinatura() {
+            const canvas = elementos.assinaturaCanvas;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            assinaturaDesenhada = false;
+            atualizarEstadoLiberacao();
+        }
+        function obterPosicaoAssinatura(evento) {
+            const rect = elementos.assinaturaCanvas.getBoundingClientRect();
+            return {
+                x: evento.clientX - rect.left,
+                y: evento.clientY - rect.top
+            };
+        }
+        function iniciarAssinatura(evento) {
+            if ((document.querySelector('input[name="liberacao-metodo"]:checked')?.value || '') !== 'assinatura') {
+                return;
+            }
+            evento.preventDefault();
+            desenhandoAssinatura = true;
+            const ctx = elementos.assinaturaCanvas.getContext('2d');
+            const pos = obterPosicaoAssinatura(evento);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+        }
+        function desenharAssinatura(evento) {
+            if (!desenhandoAssinatura) return;
+            evento.preventDefault();
+            const ctx = elementos.assinaturaCanvas.getContext('2d');
+            const pos = obterPosicaoAssinatura(evento);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            assinaturaDesenhada = true;
+            atualizarEstadoLiberacao();
+        }
+        function finalizarAssinatura(evento) {
+            if (!desenhandoAssinatura) return;
+            evento.preventDefault();
+            desenhandoAssinatura = false;
+            assinaturaDesenhada = true;
+            atualizarEstadoLiberacao();
+        }
+        function atualizarEstadoLiberacao() {
+            const sliderOk = parseInt(elementos.liberacaoSlider.value, 10) === parseInt(elementos.liberacaoSlider.max, 10);
+            const checkboxOk = elementos.liberacaoCheckbox.checked;
+            const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
+            const assinaturaOk = metodo === 'assinatura'
+                ? assinaturaDesenhada
+                : elementos.cpfConfirmacao.value.trim().length === 5;
+            elementos.liberacaoBtnConfirmar.disabled = !(sliderOk && checkboxOk && assinaturaOk);
+        }
+        async function confirmarLiberacao() {
+            if (liberacaoArmarioAtual === null) return;
+            const resultado = await callGoogleScript('liberarArmario', {
+                id: liberacaoArmarioAtual,
+                tipo: 'acompanhante' // Ajustar conforme necessário
+            });
+            if (resultado.success) {
+                fecharModalLiberacao();
+               
+                // Recarregar dados
+                await carregarArmarios();
+                await carregarEstatisticas();
+                atualizarInterface();
+                carregarDadosTabelas();
+                mostrarSucesso('Armário liberado com sucesso');
+            } else {
+                mostrarErro(resultado.error);
+            }
+        }
+        // Atualizar painel de notificações
+        function atualizarPainelNotificacoes() {
+            const notificationList = elementos.notificationPanel.querySelector('.notification-list');
+            notificationList.innerHTML = '';
+           
+            estado.notificacoes.forEach(notificacao => {
+                const item = document.createElement('div');
+                item.className = 'notification-item';
+               
+                item.innerHTML = `
+                    <div class="notification-icon ${notificacao.tipo}">
+                        <i class="fas ${notificacao.tipo === 'danger' ? 'fa-exclamation' : 'fa-clock'}"></i>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-title">${notificacao.titulo}</div>
+                        <div class="notification-time">${notificacao.tempo}</div>
+                    </div>
+                `;
+               
+                notificationList.appendChild(item);
+            });
+        }
+       
+        // Funções globais para uso nos eventos HTML
+        window.abrirModalArmario = abrirModalArmario;
+        window.liberarArmario = liberarArmario;
+        window.usarArmario = usarArmario;
+        window.abrirTermoDireto = abrirTermoDireto;
+        window.abrirMovimentacoes = abrirMovimentacoes;
+    </script>
+</body>
+</html>
