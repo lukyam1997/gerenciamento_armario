@@ -304,110 +304,126 @@ function cadastrarArmario(armarioData) {
     var historicoSheet = ss.getSheetByName(
       armarioData.tipo === 'acompanhante' ? 'Histórico Acompanhantes' : 'Histórico Visitantes'
     );
-    
+
     if (!sheet || !historicoSheet) {
       return { success: false, error: 'Abas não encontradas' };
     }
-    
-    // Buscar dados do armário físico
-    var cadastroSheet = ss.getSheetByName('Cadastro Armários');
-    var cadastroData = cadastroSheet.getDataRange().getValues();
-    var armarioFisico = null;
-    
-    for (var i = 1; i < cadastroData.length; i++) {
-      if (cadastroData[i][0] == armarioData.id && cadastroData[i][2] === armarioData.tipo) {
-        armarioFisico = cadastroData[i];
+
+    var totalLinhas = sheet.getLastRow();
+    if (totalLinhas < 2) {
+      return { success: false, error: 'Nenhum armário cadastrado' };
+    }
+
+    var numColumns = sheetName === 'Visitantes' ? 13 : 12;
+    var data = sheet.getRange(2, 1, totalLinhas - 1, numColumns).getValues();
+    var linhaPlanilha = -1;
+    var linhaAtual = null;
+    var idNumerico = Number(armarioData.id);
+
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] == idNumerico) {
+        linhaPlanilha = i + 2;
+        linhaAtual = data[i];
         break;
       }
     }
-    
-    if (!armarioFisico) {
-      return { success: false, error: 'Armário físico não encontrado' };
+
+    if ((linhaPlanilha === -1 || !linhaAtual) && armarioData.numero) {
+      var numeroInformado = String(armarioData.numero);
+      for (var j = 0; j < data.length; j++) {
+        if (data[j][1] === numeroInformado && data[j][2] === 'livre') {
+          linhaPlanilha = j + 2;
+          linhaAtual = data[j];
+          break;
+        }
+      }
     }
-    
-    // Verificar se o armário já está em uso
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 3).getValues();
-    var armarioExistente = data.find(row => row[1] === armarioFisico[1] && row[2] !== 'livre');
-    
-    if (armarioExistente) {
+
+    if (linhaPlanilha === -1 || !linhaAtual) {
+      return { success: false, error: 'Armário não encontrado' };
+    }
+
+    if (linhaAtual[2] !== 'livre') {
       return { success: false, error: 'Armário já está em uso' };
     }
-    
-    // Gerar novo ID
-    var lastRow = sheet.getLastRow();
-    var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
-    
-    // Preparar dados para a aba atual
+
     var agora = new Date();
     var horaInicio = agora.toLocaleTimeString('pt-BR');
+    var volumes = parseInt(armarioData.volumes, 10);
+    if (isNaN(volumes) || volumes < 0) {
+      volumes = 0;
+    }
     var whatsapp = armarioData.whatsapp || '';
+    var numeroArmario = linhaAtual[1];
+    var unidadeIndex = 10;
+    var unidadeAtual = linhaAtual[unidadeIndex] || '';
     var novaLinha;
 
-    if (armarioData.tipo === 'visitante') {
+    if (sheetName === 'Visitantes') {
+      var horaPrevista = armarioData.horaPrevista || '';
       novaLinha = [
-        novoId,
-        armarioFisico[1], // número
+        linhaAtual[0],
+        numeroArmario,
         'em-uso',
         armarioData.nomeVisitante,
         armarioData.nomePaciente,
         armarioData.leito,
-        parseInt(armarioData.volumes),
+        volumes,
         horaInicio,
-        armarioData.horaPrevista || '',
+        horaPrevista,
         agora,
-        armarioFisico[3], // unidade
-        false, // termoAplicado
+        unidadeAtual,
+        false,
         whatsapp
       ];
     } else {
       novaLinha = [
-        novoId,
-        armarioFisico[1], // número
+        linhaAtual[0],
+        numeroArmario,
         'em-uso',
         armarioData.nomeVisitante,
         armarioData.nomePaciente,
         armarioData.leito,
-        parseInt(armarioData.volumes),
+        volumes,
         horaInicio,
         agora,
         whatsapp,
-        armarioFisico[3], // unidade
-        false // termoAplicado
+        unidadeAtual,
+        false
       ];
     }
 
-    sheet.getRange(lastRow + 1, 1, 1, novaLinha.length).setValues([novaLinha]);
-    
-    // Registrar no histórico
+    sheet.getRange(linhaPlanilha, 1, 1, novaLinha.length).setValues([novaLinha]);
+
     var historicoLastRow = historicoSheet.getLastRow();
-    var historicoId = historicoLastRow > 1 ? Math.max(...historicoSheet.getRange(2, 1, historicoSheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
-    
+    var historicoId = historicoLastRow > 1 ? Math.max(...historicoSheet.getRange(2, 1, historicoLastRow - 1, 1).getValues().flat()) + 1 : 1;
+
     var historicoLinha = [
       historicoId,
       new Date(),
-      armarioFisico[1],
+      numeroArmario,
       armarioData.nomeVisitante,
       armarioData.nomePaciente,
       armarioData.leito,
-      parseInt(armarioData.volumes),
+      volumes,
       horaInicio,
-      '', // Hora fim vazia
+      '',
       'EM USO',
       armarioData.tipo,
-      armarioFisico[3], // unidade
+      unidadeAtual,
       whatsapp
     ];
 
     historicoSheet.getRange(historicoLastRow + 1, 1, 1, historicoLinha.length).setValues([historicoLinha]);
-    
-    registrarLog('CADASTRO', `Armário ${armarioFisico[1]} cadastrado para ${armarioData.nomeVisitante}`);
-    
-    return { 
-      success: true, 
+
+    registrarLog('CADASTRO', `Armário ${numeroArmario} cadastrado para ${armarioData.nomeVisitante}`);
+
+    return {
+      success: true,
       message: 'Armário cadastrado com sucesso',
-      id: novoId
+      id: linhaAtual[0]
     };
-    
+
   } catch (error) {
     registrarLog('ERRO', `Erro ao cadastrar armário: ${error.toString()}`);
     return { success: false, error: error.toString() };
