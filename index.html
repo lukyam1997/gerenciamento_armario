@@ -1158,6 +1158,7 @@
                                     <th>Volumes</th>
                                     <th>Hora Início</th>
                                     <th>Previsão Saída</th>
+                                    <th>WhatsApp</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -1189,6 +1190,7 @@
                                     <th>Leito</th>
                                     <th>Volumes</th>
                                     <th>Hora Início</th>
+                                    <th>WhatsApp</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -1217,6 +1219,7 @@
                                     <th>Volumes</th>
                                     <th>Hora Início</th>
                                     <th>Hora Fim</th>
+                                    <th>WhatsApp</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -1245,6 +1248,7 @@
                                     <th>Volumes</th>
                                     <th>Hora Início</th>
                                     <th>Hora Fim</th>
+                                    <th>WhatsApp</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -1412,6 +1416,10 @@
                     <div class="form-group">
                         <label for="leito">Leito</label>
                         <input type="text" id="leito" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="whatsapp-contato">WhatsApp</label>
+                        <input type="tel" id="whatsapp-contato" class="form-control" placeholder="(00) 00000-0000">
                     </div>
                     <div class="form-group">
                         <label for="volumes">Quantidade de Volumes</label>
@@ -2182,6 +2190,7 @@
                         <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
                         <p><strong>Leito:</strong> ${armario.leito}</p>
                         <p><strong>Volumes:</strong> ${armario.volumes}</p>
+                        ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão:</strong> ${armario.horaPrevista}</p>` : ''}
                         ${armario.tipo === 'acompanhante' ? `<p><strong>Termo:</strong> ${armario.termoAplicado ? 'Aplicado' : 'Pendente'}</p>` : ''}
@@ -2263,6 +2272,7 @@
                         <td>${armario.volumes || '-'}</td>
                         <td>${armario.horaInicio || '-'}</td>
                         <td>${armario.horaPrevista || '-'}</td>
+                        <td>${armario.whatsapp || '-'}</td>
                         <td>
                             ${armario.status !== 'livre'
                                 ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="visitante">Liberar</button>`
@@ -2292,6 +2302,7 @@
                         <td>${armario.leito || '-'}</td>
                         <td>${armario.volumes || '-'}</td>
                         <td>${armario.horaInicio || '-'}</td>
+                        <td>${armario.whatsapp || '-'}</td>
                         <td>
                             ${armario.status !== 'livre'
                                 ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="acompanhante">Liberar</button>
@@ -2321,6 +2332,7 @@
                     <td>${historico.volumes}</td>
                     <td>${historico.horaInicio}</td>
                     <td>${historico.horaFim}</td>
+                    <td>${historico.whatsapp || '-'}</td>
                     <td>${historico.status}</td>
                 `;
                 tbody.appendChild(tr);
@@ -2343,6 +2355,7 @@
                     <td>${historico.volumes}</td>
                     <td>${historico.horaInicio}</td>
                     <td>${historico.horaFim}</td>
+                    <td>${historico.whatsapp || '-'}</td>
                     <td>${historico.status}</td>
                 `;
                 tbody.appendChild(tr);
@@ -2592,6 +2605,12 @@
                 if (!exigeHoraPrevista) {
                     elementos.horaPrevistaInput.value = '';
                 }
+                const whatsappInput = document.getElementById('whatsapp-contato');
+                if (whatsappInput) {
+                    whatsappInput.placeholder = armario.tipo === 'visitante'
+                        ? 'WhatsApp do visitante'
+                        : 'WhatsApp do acompanhante';
+                }
                 elementos.armarioForm.dataset.modo = 'cadastro';
                 elementos.armarioForm.dataset.id = armario.id;
                 elementos.armarioForm.dataset.tipo = armario.tipo;
@@ -2612,6 +2631,7 @@
                         <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
                         <p><strong>Leito:</strong> ${armario.leito}</p>
                         <p><strong>Volumes:</strong> ${armario.volumes}</p>
+                        ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão de saída:</strong> ${armario.horaPrevista}</p>` : ''}
                         ${termoHtml}
@@ -2809,6 +2829,7 @@
                 nomeVisitante: document.getElementById('nome-visitante').value.trim(),
                 nomePaciente: document.getElementById('nome-paciente').value.trim(),
                 leito: document.getElementById('leito').value.trim(),
+                whatsapp: document.getElementById('whatsapp-contato').value.trim(),
                 volumes: parseInt(document.getElementById('volumes').value, 10),
                 horaPrevista: tipo === 'visitante' ? document.getElementById('hora-prevista').value : '',
                 tipo: tipo
@@ -3300,6 +3321,7 @@
                 <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
                 <p><strong>Leito:</strong> ${armario.leito}</p>
                 <p><strong>Volumes:</strong> ${armario.volumes}</p>
+                ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
             `;
             elementos.liberacaoSlider.value = 0;
             elementos.liberacaoCheckbox.checked = false;

@@ -24,21 +24,21 @@ function inicializarPlanilha() {
     
     // Criar abas se não existirem
     var abas = [
-      { 
-        nome: 'Histórico Visitantes', 
-        cabecalhos: ['ID', 'Data', 'Número Armário', 'Nome Visitante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Hora Fim', 'Status', 'Tipo', 'Unidade'] 
+      {
+        nome: 'Histórico Visitantes',
+        cabecalhos: ['ID', 'Data', 'Número Armário', 'Nome Visitante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Hora Fim', 'Status', 'Tipo', 'Unidade', 'WhatsApp']
       },
-      { 
-        nome: 'Histórico Acompanhantes', 
-        cabecalhos: ['ID', 'Data', 'Número Armário', 'Nome Acompanhante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Hora Fim', 'Status', 'Tipo', 'Unidade'] 
+      {
+        nome: 'Histórico Acompanhantes',
+        cabecalhos: ['ID', 'Data', 'Número Armário', 'Nome Acompanhante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Hora Fim', 'Status', 'Tipo', 'Unidade', 'WhatsApp']
       },
-      { 
-        nome: 'Visitantes', 
-        cabecalhos: ['ID', 'Número', 'Status', 'Nome Visitante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Hora Prevista', 'Data Registro', 'Unidade', 'Termo Aplicado'] 
+      {
+        nome: 'Visitantes',
+        cabecalhos: ['ID', 'Número', 'Status', 'Nome Visitante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Hora Prevista', 'Data Registro', 'Unidade', 'Termo Aplicado', 'WhatsApp']
       },
-      { 
-        nome: 'Acompanhantes', 
-        cabecalhos: ['ID', 'Número', 'Status', 'Nome Acompanhante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Data Registro', 'Unidade', 'Termo Aplicado'] 
+      {
+        nome: 'Acompanhantes',
+        cabecalhos: ['ID', 'Número', 'Status', 'Nome Acompanhante', 'Nome Paciente', 'Leito', 'Volumes', 'Hora Início', 'Data Registro', 'WhatsApp', 'Unidade', 'Termo Aplicado']
       },
       { 
         nome: 'Cadastro Armários', 
@@ -257,10 +257,14 @@ function getArmariosFromSheet(sheetName, tipo) {
     return [];
   }
   
-  var numColumns = sheetName === 'Visitantes' ? 12 : 11;
+  var isVisitante = sheetName === 'Visitantes';
+  var numColumns = isVisitante ? 13 : 12;
+  var unidadeIndex = 10;
+  var termoIndex = 11;
+  var whatsappIndex = isVisitante ? 12 : 9;
   var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, numColumns).getValues();
   var armarios = [];
-  
+
   data.forEach(function(row) {
     if (row[0]) {
       var armario = {
@@ -273,11 +277,12 @@ function getArmariosFromSheet(sheetName, tipo) {
         volumes: row[6] || 0,
         horaInicio: row[7] || '',
         tipo: tipo,
-        unidade: row[sheetName === 'Visitantes' ? 10 : 9] || '',
-        termoAplicado: row[sheetName === 'Visitantes' ? 11 : 10] || false
+        unidade: row[unidadeIndex] || '',
+        termoAplicado: row[termoIndex] || false,
+        whatsapp: row[whatsappIndex] || ''
       };
-      
-      if (sheetName === 'Visitantes') {
+
+      if (isVisitante) {
         armario.horaPrevista = row[8] || '';
         armario.dataRegistro = row[9] || '';
       } else {
@@ -334,24 +339,43 @@ function cadastrarArmario(armarioData) {
     
     // Preparar dados para a aba atual
     var agora = new Date();
-    var novaLinha = [
-      novoId,
-      armarioFisico[1], // número
-      'em-uso',
-      armarioData.nomeVisitante,
-      armarioData.nomePaciente,
-      armarioData.leito,
-      parseInt(armarioData.volumes),
-      agora.toLocaleTimeString('pt-BR'),
-      agora,
-      armarioFisico[3], // unidade
-      false // termoAplicado
-    ];
-    
+    var horaInicio = agora.toLocaleTimeString('pt-BR');
+    var whatsapp = armarioData.whatsapp || '';
+    var novaLinha;
+
     if (armarioData.tipo === 'visitante') {
-      novaLinha.splice(8, 0, armarioData.horaPrevista);
+      novaLinha = [
+        novoId,
+        armarioFisico[1], // número
+        'em-uso',
+        armarioData.nomeVisitante,
+        armarioData.nomePaciente,
+        armarioData.leito,
+        parseInt(armarioData.volumes),
+        horaInicio,
+        armarioData.horaPrevista || '',
+        agora,
+        armarioFisico[3], // unidade
+        false, // termoAplicado
+        whatsapp
+      ];
+    } else {
+      novaLinha = [
+        novoId,
+        armarioFisico[1], // número
+        'em-uso',
+        armarioData.nomeVisitante,
+        armarioData.nomePaciente,
+        armarioData.leito,
+        parseInt(armarioData.volumes),
+        horaInicio,
+        agora,
+        whatsapp,
+        armarioFisico[3], // unidade
+        false // termoAplicado
+      ];
     }
-    
+
     sheet.getRange(lastRow + 1, 1, 1, novaLinha.length).setValues([novaLinha]);
     
     // Registrar no histórico
@@ -366,13 +390,14 @@ function cadastrarArmario(armarioData) {
       armarioData.nomePaciente,
       armarioData.leito,
       parseInt(armarioData.volumes),
-      agora.toLocaleTimeString('pt-BR'),
+      horaInicio,
       '', // Hora fim vazia
       'EM USO',
       armarioData.tipo,
-      armarioFisico[3] // unidade
+      armarioFisico[3], // unidade
+      whatsapp
     ];
-    
+
     historicoSheet.getRange(historicoLastRow + 1, 1, 1, historicoLinha.length).setValues([historicoLinha]);
     
     registrarLog('CADASTRO', `Armário ${armarioFisico[1]} cadastrado para ${armarioData.nomeVisitante}`);
@@ -403,7 +428,7 @@ function liberarArmario(id, tipo) {
     }
     
     // Encontrar o armário na aba atual
-    var numColumns = sheetName === 'Visitantes' ? 12 : 11;
+    var numColumns = sheetName === 'Visitantes' ? 13 : 12;
     var data = sheet.getRange(2, 1, sheet.getLastRow()-1, numColumns).getValues();
     var armarioIndex = -1;
     var armarioData = null;
@@ -422,29 +447,47 @@ function liberarArmario(id, tipo) {
     var linha = armarioIndex + 2;
     
     // Limpar dados do armário (deixar apenas número e status livre)
-    var novaLinha = [
-      armarioData[0], // ID
-      armarioData[1], // Número
-      'livre', // Status
-      '', // Nome
-      '', // Paciente
-      '', // Leito
-      '', // Volumes
-      '', // Hora Início
-      new Date() // Data Registro
-    ];
-    
+    var unidadeIndex = 10;
+    var unidadeAtual = armarioData[unidadeIndex] || '';
+    var novaLinha;
+
     if (tipo === 'visitante') {
-      novaLinha.splice(8, 0, ''); // Hora Prevista
+      novaLinha = [
+        armarioData[0], // ID
+        armarioData[1], // Número
+        'livre', // Status
+        '', // Nome
+        '', // Paciente
+        '', // Leito
+        '', // Volumes
+        '', // Hora Início
+        '', // Hora Prevista
+        new Date(), // Data Registro
+        unidadeAtual, // Unidade
+        false, // TermoAplicado
+        '' // WhatsApp
+      ];
+    } else {
+      novaLinha = [
+        armarioData[0], // ID
+        armarioData[1], // Número
+        'livre', // Status
+        '', // Nome
+        '', // Paciente
+        '', // Leito
+        '', // Volumes
+        '', // Hora Início
+        new Date(), // Data Registro
+        '', // WhatsApp
+        unidadeAtual, // Unidade
+        false // TermoAplicado
+      ];
     }
-    
-    novaLinha.push(armarioData[ sheetName === 'Visitantes' ? 10 : 9 ] || ''); // Unidade
-    novaLinha.push(false); // TermoAplicado
-    
+
     sheet.getRange(linha, 1, 1, novaLinha.length).setValues([novaLinha]);
-    
+
     // Atualizar histórico - encontrar a entrada mais recente deste armário
-    var historicoData = historicoSheet.getRange(2, 1, historicoSheet.getLastRow()-1, 12).getValues();
+    var historicoData = historicoSheet.getRange(2, 1, historicoSheet.getLastRow()-1, 13).getValues();
     var historicoIndex = -1;
     
     for (var i = historicoData.length - 1; i >= 0; i--) {
@@ -496,7 +539,7 @@ function getHistorico(tipo) {
       return { success: true, data: [] };
     }
     
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 12).getValues();
+    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 13).getValues();
     var historico = [];
     
     data.forEach(function(row) {
@@ -513,7 +556,8 @@ function getHistorico(tipo) {
           horaFim: row[8],
           status: row[9],
           tipo: row[10],
-          unidade: row[11]
+          unidade: row[11],
+          whatsapp: row[12] || ''
         });
       }
     });
@@ -650,24 +694,41 @@ function criarArmariosUso(armarios) {
         var lastRow = sheet.getLastRow();
         var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
         
-        var novaLinha = [
-          novoId,
-          armario[1], // número
-          'livre', // status
-          '', // nome
-          '', // paciente
-          '', // leito
-          0, // volumes
-          '', // hora início
-          new Date(), // data registro
-          armario[3], // unidade
-          false // termo aplicado
-        ];
-        
+        var novaLinha;
+
         if (armario[2] === 'visitante') {
-          novaLinha.splice(8, 0, ''); // hora prevista
+          novaLinha = [
+            novoId,
+            armario[1], // número
+            'livre', // status
+            '', // nome
+            '', // paciente
+            '', // leito
+            0, // volumes
+            '', // hora início
+            '', // hora prevista
+            new Date(), // data registro
+            armario[3], // unidade
+            false, // termo aplicado
+            '' // WhatsApp
+          ];
+        } else {
+          novaLinha = [
+            novoId,
+            armario[1], // número
+            'livre', // status
+            '', // nome
+            '', // paciente
+            '', // leito
+            0, // volumes
+            '', // hora início
+            new Date(), // data registro
+            '', // WhatsApp
+            armario[3], // unidade
+            false // termo aplicado
+          ];
         }
-        
+
         sheet.getRange(lastRow + 1, 1, 1, novaLinha.length).setValues([novaLinha]);
       }
     });
@@ -838,7 +899,7 @@ function salvarTermoCompleto(dadosTermo) {
       if (dataAcompanhantes[i][0] == dadosTermo.armarioId) {
         // Atualizar volumes e marcar termo como aplicado
         sheetAcompanhantes.getRange(i + 1, 7).setValue(dadosTermo.volumes.reduce((total, volume) => total + (Number(volume.quantidade) || 0), 0));
-        sheetAcompanhantes.getRange(i + 1, 11).setValue(true); // Termo aplicado
+        sheetAcompanhantes.getRange(i + 1, 12).setValue(true); // Termo aplicado
         break;
       }
     }
