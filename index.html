@@ -2566,6 +2566,114 @@
                 elementos.armariosContainer.appendChild(card);
             });
         }
+
+        function atualizarResumoDashboardLocal() {
+            const totais = {
+                livres: 0,
+                emUso: 0,
+                proximo: 0,
+                vencidos: 0
+            };
+
+            estado.armarios.forEach(armario => {
+                switch (armario.status) {
+                    case 'livre':
+                        totais.livres += 1;
+                        break;
+                    case 'em-uso':
+                        totais.emUso += 1;
+                        break;
+                    case 'proximo':
+                        totais.proximo += 1;
+                        break;
+                    case 'vencido':
+                        totais.vencidos += 1;
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+            elementos.cardsCount.livres.textContent = totais.livres;
+            elementos.cardsCount.emUso.textContent = totais.emUso;
+            elementos.cardsCount.proximo.textContent = totais.proximo;
+            elementos.cardsCount.vencidos.textContent = totais.vencidos;
+        }
+
+        function atualizarArmarioLocal(id, atualizacoes) {
+            const indice = estado.armarios.findIndex(armario => armario.id === id);
+            if (indice === -1) {
+                return null;
+            }
+
+            const armarioAtualizado = {
+                ...estado.armarios[indice],
+                ...atualizacoes
+            };
+
+            estado.armarios[indice] = armarioAtualizado;
+            return armarioAtualizado;
+        }
+
+        function garantirArmarioLiberadoLocal(id, metodo, confirmacao) {
+            const armario = obterArmarioPorId(id);
+            if (!armario) {
+                return false;
+            }
+
+            const atualizacoes = {};
+            let precisaAtualizar = false;
+
+            if (armario.status !== 'livre') {
+                Object.assign(atualizacoes, {
+                    status: 'livre',
+                    nomeVisitante: '',
+                    nomePaciente: '',
+                    leito: '',
+                    volumes: '',
+                    whatsapp: '',
+                    horaInicio: '',
+                    horaPrevista: ''
+                });
+                precisaAtualizar = true;
+            }
+
+            if (armario.tipo === 'acompanhante' && !armario.termoFinalizado) {
+                atualizacoes.termoFinalizado = true;
+                precisaAtualizar = true;
+            }
+
+            if (armario.tipo === 'acompanhante' && armario.termoInfo) {
+                const termoAtualizado = { ...armario.termoInfo };
+                let atualizouTermo = false;
+
+                if (!termoAtualizado.finalizadoEm) {
+                    termoAtualizado.finalizadoEm = new Date().toISOString();
+                    atualizouTermo = true;
+                }
+
+                if (metodo && termoAtualizado.metodoFinal !== metodo) {
+                    termoAtualizado.metodoFinal = metodo;
+                    atualizouTermo = true;
+                }
+
+                if (metodo === 'cpf' && confirmacao && termoAtualizado.cpfConfirmacao !== confirmacao) {
+                    termoAtualizado.cpfConfirmacao = confirmacao;
+                    atualizouTermo = true;
+                }
+
+                if (atualizouTermo) {
+                    atualizacoes.termoInfo = termoAtualizado;
+                    precisaAtualizar = true;
+                }
+            }
+
+            if (!precisaAtualizar) {
+                return false;
+            }
+
+            return Boolean(atualizarArmarioLocal(id, atualizacoes));
+        }
         // Carregar dados nas tabelas
         async function carregarDadosTabelas() {
             const unidadeFiltro = estado.unidadeAtual;
@@ -3340,6 +3448,8 @@
             if (resultado.success) {
                 await carregarArmarios();
                 await carregarEstatisticas();
+                garantirArmarioLiberadoLocal(id);
+                atualizarResumoDashboardLocal();
                 atualizarInterface();
                 carregarDadosTabelas();
                 mostrarSucesso('Armário liberado com sucesso');
@@ -4046,6 +4156,7 @@
         }
         async function confirmarLiberacao() {
             if (liberacaoArmarioAtual === null) return;
+            const armarioId = liberacaoArmarioAtual;
             const estado = obterEstadoLiberacao();
             if (!estado.sliderOk || !estado.checkboxOk || !estado.assinaturaOk) {
                 const mensagens = [];
@@ -4077,7 +4188,7 @@
 
             try {
                 const resultadoFinalizacao = await callGoogleScript('finalizarTermo', {
-                    armarioId: liberacaoArmarioAtual,
+                    armarioId,
                     metodo,
                     assinaturaFinal,
                     confirmacao
@@ -4089,7 +4200,7 @@
                 }
 
                 const resultado = await callGoogleScript('liberarArmario', {
-                    id: liberacaoArmarioAtual,
+                    id: armarioId,
                     tipo: 'acompanhante'
                 });
                 if (resultado.success) {
@@ -4098,6 +4209,8 @@
                     // Recarregar dados
                     await carregarArmarios();
                     await carregarEstatisticas();
+                    garantirArmarioLiberadoLocal(armarioId, metodo, confirmacao);
+                    atualizarResumoDashboardLocal();
                     atualizarInterface();
                     carregarDadosTabelas();
                     mostrarSucesso('Termo finalizado e armário liberado com sucesso');
