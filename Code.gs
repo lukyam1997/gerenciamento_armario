@@ -864,9 +864,60 @@ function alternarStatusUnidade(dados) {
 // Funções para Termos de Responsabilidade
 function salvarTermoCompleto(dadosTermo) {
   try {
+    var orientacoes = dadosTermo.orientacoes;
+    if (typeof orientacoes === 'string' && orientacoes !== '') {
+      try {
+        orientacoes = JSON.parse(orientacoes);
+      } catch (erroOrientacoes) {
+        orientacoes = orientacoes.split(',').map(function(item) { return item.trim(); }).filter(String);
+      }
+    }
+    if (!Array.isArray(orientacoes)) {
+      orientacoes = [];
+    }
+
+    var volumes = dadosTermo.volumes;
+    if (typeof volumes === 'string' && volumes !== '') {
+      try {
+        volumes = JSON.parse(volumes);
+      } catch (erroVolumes) {
+        volumes = [];
+      }
+    }
+    if (!Array.isArray(volumes)) {
+      volumes = [];
+    }
+    volumes = volumes.map(function(item) {
+      if (typeof item === 'string') {
+        return { quantidade: 0, descricao: item };
+      }
+      var quantidadeNumero = Number(item.quantidade);
+      return {
+        quantidade: isNaN(quantidadeNumero) ? 0 : quantidadeNumero,
+        descricao: item && item.descricao ? String(item.descricao) : ''
+      };
+    }).filter(function(item) {
+      return item.quantidade > 0 && item.descricao;
+    });
+
+    var descricaoVolumes = dadosTermo.descricaoVolumes;
+    if (!descricaoVolumes) {
+      descricaoVolumes = volumes.map(function(item) {
+        return item.quantidade + 'x ' + item.descricao;
+      }).join('; ');
+    }
+
+    var totalVolumes = volumes.reduce(function(total, volume) {
+      return total + (Number(volume.quantidade) || 0);
+    }, 0);
+
+    dadosTermo.orientacoes = orientacoes;
+    dadosTermo.volumes = volumes;
+    dadosTermo.descricaoVolumes = descricaoVolumes;
+
     // 1. Gerar e salvar PDF no Drive
     var resultadoPDF = gerarESalvarTermoPDF(dadosTermo);
-    
+
     if (!resultadoPDF.success) {
       throw new Error('Erro ao gerar PDF: ' + resultadoPDF.error);
     }
@@ -897,9 +948,9 @@ function salvarTermoCompleto(dadosTermo) {
       dadosTermo.telefone || '',
       dadosTermo.documento || '',
       dadosTermo.parentesco || '',
-      dadosTermo.orientacoes.join(','),
-      JSON.stringify(dadosTermo.volumes),
-      dadosTermo.descricaoVolumes,
+      orientacoes.join(','),
+      JSON.stringify(volumes),
+      descricaoVolumes,
       new Date(),
       resultadoPDF.pdfUrl,
       dadosTermo.assinaturaBase64 || ''
@@ -914,7 +965,7 @@ function salvarTermoCompleto(dadosTermo) {
     for (var i = 1; i < dataAcompanhantes.length; i++) {
       if (dataAcompanhantes[i][0] == dadosTermo.armarioId) {
         // Atualizar volumes e marcar termo como aplicado
-        sheetAcompanhantes.getRange(i + 1, 7).setValue(dadosTermo.volumes.reduce((total, volume) => total + (Number(volume.quantidade) || 0), 0));
+        sheetAcompanhantes.getRange(i + 1, 7).setValue(totalVolumes);
         sheetAcompanhantes.getRange(i + 1, 12).setValue(true); // Termo aplicado
         break;
       }
