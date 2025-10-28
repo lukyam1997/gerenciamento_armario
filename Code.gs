@@ -200,7 +200,11 @@ function handlePost(e) {
       case 'salvarTermoCompleto':
         return ContentService.createTextOutput(JSON.stringify(salvarTermoCompleto(e.parameter)))
           .setMimeType(ContentService.MimeType.JSON);
-      
+
+      case 'finalizarTermo':
+        return ContentService.createTextOutput(JSON.stringify(finalizarTermo(e.parameter)))
+          .setMimeType(ContentService.MimeType.JSON);
+
       case 'getTermo':
         return ContentService.createTextOutput(JSON.stringify(getTermo(e.parameter)))
           .setMimeType(ContentService.MimeType.JSON);
@@ -235,13 +239,26 @@ function handlePost(e) {
 // Funções para Armários
 function getArmarios(tipo) {
   try {
+    var incluirTermos = tipo === 'acompanhante' || tipo === 'admin' || tipo === 'ambos' || tipo === 'todos';
+    var termosMap = {};
+
+    if (incluirTermos) {
+      var termosInfo = obterTermosRegistrados();
+      termosInfo.termos.forEach(function(termo) {
+        if (!termosMap[termo.armarioId] || termosMap[termo.armarioId].id < termo.id) {
+          termosMap[termo.armarioId] = termo;
+        }
+      });
+    }
+
     if (tipo === 'admin' || tipo === 'ambos') {
-      let visitantes = getArmariosFromSheet('Visitantes', 'visitante');
-      let acompanhantes = getArmariosFromSheet('Acompanhantes', 'acompanhante');
+      var visitantes = getArmariosFromSheet('Visitantes', 'visitante', null);
+      var acompanhantes = getArmariosFromSheet('Acompanhantes', 'acompanhante', termosMap);
       return { success: true, data: visitantes.concat(acompanhantes) };
     } else {
-      let sheetName = tipo === 'acompanhante' ? 'Acompanhantes' : 'Visitantes';
-      return { success: true, data: getArmariosFromSheet(sheetName, tipo) };
+      var sheetName = tipo === 'acompanhante' ? 'Acompanhantes' : 'Visitantes';
+      var mapa = tipo === 'acompanhante' ? termosMap : null;
+      return { success: true, data: getArmariosFromSheet(sheetName, tipo, mapa) };
     }
   } catch (error) {
     registrarLog('ERRO', `Erro ao buscar armários: ${error.toString()}`);
@@ -249,7 +266,7 @@ function getArmarios(tipo) {
   }
 }
 
-function getArmariosFromSheet(sheetName, tipo) {
+function getArmariosFromSheet(sheetName, tipo, termosMap) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(sheetName);
   
@@ -288,11 +305,35 @@ function getArmariosFromSheet(sheetName, tipo) {
       } else {
         armario.dataRegistro = row[8] || '';
       }
-      
+
+      if (tipo === 'acompanhante') {
+        var termoRelacionado = termosMap ? termosMap[armario.id] : null;
+        if (termoRelacionado) {
+          armario.termoAplicado = true;
+          armario.termoFinalizado = Boolean(termoRelacionado.pdfUrl);
+          armario.termoInfo = {
+            id: termoRelacionado.id,
+            aplicadoEm: termoRelacionado.aplicadoEm,
+            finalizadoEm: termoRelacionado.assinaturas.finalizadoEm,
+            pdfUrl: termoRelacionado.pdfUrl || '',
+            responsavel: termoRelacionado.acompanhante,
+            metodoFinal: termoRelacionado.assinaturas.metodoFinal,
+            cpfFinal: termoRelacionado.assinaturas.cpfFinal
+          };
+        } else {
+          armario.termoAplicado = false;
+          armario.termoFinalizado = false;
+          armario.termoInfo = null;
+        }
+      } else {
+        armario.termoFinalizado = false;
+        armario.termoInfo = null;
+      }
+
       armarios.push(armario);
     }
   });
-  
+
   return armarios;
 }
 
@@ -520,22 +561,8 @@ function liberarArmario(id, tipo) {
       historicoSheet.getRange(historicoLinha, 10).setValue('FINALIZADO'); // Status
     }
     
-    // Remover termo se existir
-    if (tipo === 'acompanhante') {
-      var termosSheet = ss.getSheetByName('Termos de Responsabilidade');
-      if (termosSheet) {
-        var termosData = termosSheet.getDataRange().getValues();
-        for (var j = 1; j < termosData.length; j++) {
-          if (termosData[j][1] == id) {
-            termosSheet.deleteRow(j + 1);
-            break;
-          }
-        }
-      }
-    }
-    
     registrarLog('LIBERAÇÃO', `Armário ${armarioData[1]} liberado`);
-    
+
     return { success: true, message: 'Armário liberado com sucesso' };
     
   } catch (error) {
@@ -915,27 +942,49 @@ function salvarTermoCompleto(dadosTermo) {
     dadosTermo.volumes = volumes;
     dadosTermo.descricaoVolumes = descricaoVolumes;
 
-    // 1. Gerar e salvar PDF no Drive
-    var resultadoPDF = gerarESalvarTermoPDF(dadosTermo);
-
-    if (!resultadoPDF.success) {
-      throw new Error('Erro ao gerar PDF: ' + resultadoPDF.error);
-    }
-    
-    // 2. Salvar na aba "Termos de Responsabilidade"
+    // 1. Salvar na aba "Termos de Responsabilidade"
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Termos de Responsabilidade');
-    
+
     if (!sheet) {
       throw new Error('Aba "Termos de Responsabilidade" não encontrada');
     }
-    
-    var lastRow = sheet.getLastRow();
-    var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
-    
-    // Preparar dados para a planilha
-    var novaLinha = [
-      novoId,
+
+    var dadosExistentes = sheet.getDataRange().getValues();
+    var linhaExistente = -1;
+    var termoId = null;
+    var aplicadoEm = new Date();
+
+    for (var i = dadosExistentes.length - 1; i >= 1; i--) {
+      if (dadosExistentes[i][1] == dadosTermo.armarioId) {
+        if (!dadosExistentes[i][17]) { // Termo ainda não finalizado
+          linhaExistente = i + 1;
+          termoId = dadosExistentes[i][0];
+          aplicadoEm = dadosExistentes[i][16] || new Date();
+          break;
+        }
+      }
+    }
+
+    if (linhaExistente === -1) {
+      var lastRow = sheet.getLastRow();
+      termoId = lastRow > 1 ? Math.max.apply(null, sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat()) + 1 : 1;
+      linhaExistente = lastRow + 1;
+    }
+
+    var valorAtualAssinatura = '';
+    if (linhaExistente <= dadosExistentes.length && linhaExistente - 1 >= 0) {
+      var linhaAtual = dadosExistentes[linhaExistente - 1];
+      if (linhaAtual && linhaAtual.length > 18) {
+        valorAtualAssinatura = linhaAtual[18];
+      }
+    }
+
+    var assinaturasInfo = normalizarAssinaturas(valorAtualAssinatura);
+    assinaturasInfo.inicial = dadosTermo.assinaturaBase64 || assinaturasInfo.inicial || '';
+
+    var linhaDados = [
+      termoId,
       dadosTermo.armarioId,
       dadosTermo.numeroArmario,
       dadosTermo.paciente,
@@ -951,46 +1000,139 @@ function salvarTermoCompleto(dadosTermo) {
       orientacoes.join(','),
       JSON.stringify(volumes),
       descricaoVolumes,
-      new Date(),
-      resultadoPDF.pdfUrl,
-      dadosTermo.assinaturaBase64 || ''
+      aplicadoEm,
+      '',
+      JSON.stringify(assinaturasInfo)
     ];
-    
-    sheet.getRange(lastRow + 1, 1, 1, novaLinha.length).setValues([novaLinha]);
-    
-    // 3. Atualizar status do armário na aba "Acompanhantes"
+
+    sheet.getRange(linhaExistente, 1, 1, linhaDados.length).setValues([linhaDados]);
+
+    // 2. Atualizar status do armário na aba "Acompanhantes"
     var sheetAcompanhantes = ss.getSheetByName('Acompanhantes');
     var dataAcompanhantes = sheetAcompanhantes.getDataRange().getValues();
-    
+
     for (var i = 1; i < dataAcompanhantes.length; i++) {
       if (dataAcompanhantes[i][0] == dadosTermo.armarioId) {
         // Atualizar volumes e marcar termo como aplicado
         sheetAcompanhantes.getRange(i + 1, 7).setValue(totalVolumes);
-        sheetAcompanhantes.getRange(i + 1, 12).setValue(true); // Termo aplicado
+        sheetAcompanhantes.getRange(i + 1, 12).setValue(true); // Termo iniciado
         break;
       }
     }
-    
-    registrarLog('TERMO_APLICADO', `Termo aplicado para armário ${dadosTermo.numeroArmario} - PDF: ${resultadoPDF.pdfUrl}`);
-    
+
+    registrarLog('TERMO_APLICADO', `Termo inicial registrado para armário ${dadosTermo.numeroArmario}`);
+
     return {
       success: true,
-      message: 'Termo salvo com sucesso e PDF gerado',
-      pdfUrl: resultadoPDF.pdfUrl,
-      termoId: novoId
+      message: 'Termo registrado. Finalize na liberação para gerar o PDF.',
+      termoId: termoId
     };
-    
+
   } catch (error) {
     registrarLog('ERRO_TERMO', `Erro ao salvar termo: ${error.toString()}`);
     return { success: false, error: error.toString() };
   }
 }
 
+function normalizarAssinaturas(valor) {
+  var info = {
+    inicial: '',
+    final: '',
+    metodoFinal: '',
+    cpfFinal: '',
+    finalizadoEm: ''
+  };
+
+  if (!valor) {
+    return info;
+  }
+
+  if (typeof valor === 'string') {
+    try {
+      var json = JSON.parse(valor);
+      info.inicial = json.inicial || '';
+      info.final = json.final || '';
+      info.metodoFinal = json.metodoFinal || '';
+      info.cpfFinal = json.cpfFinal || '';
+      info.finalizadoEm = json.finalizadoEm || '';
+      return info;
+    } catch (erro) {
+      info.inicial = valor;
+      return info;
+    }
+  }
+
+  if (typeof valor === 'object') {
+    info.inicial = valor.inicial || '';
+    info.final = valor.final || '';
+    info.metodoFinal = valor.metodoFinal || '';
+    info.cpfFinal = valor.cpfFinal || '';
+    info.finalizadoEm = valor.finalizadoEm || '';
+  }
+
+  return info;
+}
+
+function obterTermosRegistrados() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Termos de Responsabilidade');
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { sheet: sheet, termos: [] };
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var termos = [];
+
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i][0]) {
+      continue;
+    }
+
+    var assinaturas = normalizarAssinaturas(data[i][18]);
+    var orientacoes = data[i][13] ? data[i][13].split(',').filter(String) : [];
+    var volumes = [];
+
+    if (data[i][14]) {
+      try {
+        volumes = JSON.parse(data[i][14]);
+      } catch (erroVolume) {
+        volumes = [];
+      }
+    }
+
+    termos.push({
+      linha: i + 1,
+      id: data[i][0],
+      armarioId: data[i][1],
+      numeroArmario: data[i][2],
+      paciente: data[i][3],
+      prontuario: data[i][4],
+      nascimento: data[i][5],
+      setor: data[i][6],
+      leito: data[i][7],
+      consciente: data[i][8],
+      acompanhante: data[i][9],
+      telefone: data[i][10],
+      documento: data[i][11],
+      parentesco: data[i][12],
+      orientacoes: orientacoes,
+      volumes: Array.isArray(volumes) ? volumes : [],
+      descricaoVolumes: data[i][15],
+      aplicadoEm: data[i][16],
+      pdfUrl: data[i][17],
+      assinaturas: assinaturas
+    });
+  }
+
+  return { sheet: sheet, termos: termos };
+}
+
 function getTermo(dados) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Termos de Responsabilidade');
-    
+
     if (!sheet || sheet.getLastRow() < 2) {
       return { success: false, error: 'Termo não encontrado' };
     }
@@ -998,8 +1140,19 @@ function getTermo(dados) {
     var data = sheet.getDataRange().getValues();
     var termo = null;
     
-    for (var i = 1; i < data.length; i++) {
+    for (var i = data.length - 1; i >= 1; i--) {
       if (data[i][1] == dados.armarioId) {
+        var assinaturas = normalizarAssinaturas(data[i][18]);
+        var orientacoesSalvas = data[i][13] ? data[i][13].split(',').filter(String) : [];
+        var volumesSalvos = [];
+        if (data[i][14]) {
+          try {
+            volumesSalvos = JSON.parse(data[i][14]);
+          } catch (erroVolumes) {
+            volumesSalvos = [];
+          }
+        }
+
         termo = {
           id: data[i][0],
           armarioId: data[i][1],
@@ -1014,12 +1167,16 @@ function getTermo(dados) {
           telefone: data[i][10],
           documento: data[i][11],
           parentesco: data[i][12],
-          orientacoes: data[i][13] ? data[i][13].split(',') : [],
-          volumes: data[i][14] ? JSON.parse(data[i][14]) : [],
+          orientacoes: orientacoesSalvas,
+          volumes: Array.isArray(volumesSalvos) ? volumesSalvos : [],
           descricaoVolumes: data[i][15],
           aplicadoEm: data[i][16],
           pdfUrl: data[i][17],
-          assinaturaBase64: data[i][18]
+          assinaturaBase64: assinaturas.inicial,
+          assinaturas: assinaturas,
+          finalizadoEm: assinaturas.finalizadoEm,
+          metodoFinal: assinaturas.metodoFinal,
+          cpfConfirmacao: assinaturas.cpfFinal
         };
         break;
       }
@@ -1033,6 +1190,106 @@ function getTermo(dados) {
     
   } catch (error) {
     registrarLog('ERRO', `Erro ao buscar termo: ${error.toString()}`);
+    return { success: false, error: error.toString() };
+  }
+}
+
+function finalizarTermo(dados) {
+  try {
+    var armarioId = parseInt(dados.armarioId, 10);
+    if (!armarioId) {
+      return { success: false, error: 'ID do armário inválido' };
+    }
+
+    var metodo = (dados.metodo || 'assinatura').toString();
+    var confirmacao = dados.confirmacao || '';
+    var assinaturaFinal = dados.assinaturaFinal || '';
+
+    var termosInfo = obterTermosRegistrados();
+    if (!termosInfo.sheet) {
+      return { success: false, error: 'Aba "Termos de Responsabilidade" não encontrada' };
+    }
+
+    var termoEncontrado = null;
+    for (var i = termosInfo.termos.length - 1; i >= 0; i--) {
+      if (termosInfo.termos[i].armarioId == armarioId && !termosInfo.termos[i].pdfUrl) {
+        termoEncontrado = termosInfo.termos[i];
+        break;
+      }
+    }
+
+    if (!termoEncontrado) {
+      for (var j = termosInfo.termos.length - 1; j >= 0; j--) {
+        if (termosInfo.termos[j].armarioId == armarioId) {
+          termoEncontrado = termosInfo.termos[j];
+          break;
+        }
+      }
+    }
+
+    if (!termoEncontrado) {
+      return { success: false, error: 'Termo não localizado para este armário' };
+    }
+
+    var assinaturas = termoEncontrado.assinaturas || normalizarAssinaturas('');
+    var agora = new Date();
+    assinaturas.metodoFinal = metodo;
+    assinaturas.cpfFinal = metodo === 'cpf' ? confirmacao : '';
+    assinaturas.finalizadoEm = agora;
+    assinaturas.final = metodo === 'assinatura' ? assinaturaFinal : '';
+
+    var movimentacoesResultado = getMovimentacoes({ armarioId: armarioId });
+    var movimentacoes = [];
+    if (movimentacoesResultado && movimentacoesResultado.success && Array.isArray(movimentacoesResultado.data)) {
+      movimentacoes = movimentacoesResultado.data;
+    } else if (movimentacoesResultado && movimentacoesResultado.success) {
+      registrarLog('AVISO_TERMO', 'Dados de movimentações inválidos ao finalizar termo do armário ' + termoEncontrado.numeroArmario);
+    } else if (movimentacoesResultado && !movimentacoesResultado.success) {
+      registrarLog('AVISO_TERMO', 'Movimentações indisponíveis ao finalizar termo do armário ' + termoEncontrado.numeroArmario + ': ' + (movimentacoesResultado.error || 'dados inválidos'));
+    }
+
+    var dadosPDF = {
+      numeroArmario: termoEncontrado.numeroArmario,
+      paciente: termoEncontrado.paciente,
+      prontuario: termoEncontrado.prontuario,
+      nascimento: termoEncontrado.nascimento,
+      setor: termoEncontrado.setor,
+      leito: termoEncontrado.leito,
+      consciente: termoEncontrado.consciente,
+      acompanhante: termoEncontrado.acompanhante,
+      telefone: termoEncontrado.telefone,
+      documento: termoEncontrado.documento,
+      parentesco: termoEncontrado.parentesco,
+      orientacoes: termoEncontrado.orientacoes,
+      volumes: termoEncontrado.volumes,
+      descricaoVolumes: termoEncontrado.descricaoVolumes,
+      aplicadoEm: termoEncontrado.aplicadoEm,
+      finalizadoEm: agora,
+      assinaturaInicial: assinaturas.inicial,
+      assinaturaFinal: assinaturas.final,
+      metodoFinal: assinaturas.metodoFinal,
+      cpfFinal: assinaturas.cpfFinal,
+      movimentacoes: movimentacoes
+    };
+
+    var resultadoPDF = gerarESalvarTermoPDF(dadosPDF);
+    if (!resultadoPDF.success) {
+      throw new Error(resultadoPDF.error || 'Falha ao gerar PDF');
+    }
+
+    termosInfo.sheet.getRange(termoEncontrado.linha, 18).setValue(resultadoPDF.pdfUrl);
+    termosInfo.sheet.getRange(termoEncontrado.linha, 19).setValue(JSON.stringify(assinaturas));
+
+    registrarLog('TERMO_FINALIZADO', 'Termo finalizado para armário ' + termoEncontrado.numeroArmario);
+
+    return {
+      success: true,
+      pdfUrl: resultadoPDF.pdfUrl,
+      finalizadoEm: agora
+    };
+
+  } catch (error) {
+    registrarLog('ERRO_TERMO', 'Erro ao finalizar termo: ' + error.toString());
     return { success: false, error: error.toString() };
   }
 }
@@ -1078,131 +1335,185 @@ function gerarESalvarTermoPDF(dadosTermo) {
   }
 }
 
+
 function criarHTMLTermo(dadosTermo) {
-  var html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <base target="_top">
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                margin: 20px; 
-                line-height: 1.6;
-            }
-            .header { 
-                text-align: center; 
-                border-bottom: 2px solid #333;
-                padding-bottom: 10px;
-                margin-bottom: 20px;
-            }
-            .section { 
-                margin-bottom: 15px; 
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-            }
-            .section-title { 
-                font-weight: bold; 
-                color: #2c6e8f;
-                margin-bottom: 8px;
-            }
-            .assinatura-area {
-                margin-top: 30px;
-                text-align: center;
-            }
-            .assinatura-img {
-                max-width: 300px;
-                border: 1px solid #ccc;
-                margin: 10px 0;
-            }
-            .volumes-list {
-                margin-left: 20px;
-            }
-            .footer {
-                margin-top: 40px;
-                font-size: 0.9em;
-                color: #666;
-                text-align: center;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h2>TERMO DE RESPONSABILIDADE</h2>
-            <h3>Controle de Armários Hospitalares</h3>
-            <p>Armário: ${dadosTermo.numeroArmario}</p>
-        </div>
-
-        <div class="section">
-            <div class="section-title">DADOS DO PACIENTE</div>
-            <p><strong>Nome:</strong> ${dadosTermo.paciente}</p>
-            <p><strong>Prontuário:</strong> ${dadosTermo.prontuario}</p>
-            <p><strong>Data de Nascimento:</strong> ${formatarDataParaHTML(dadosTermo.nascimento)}</p>
-            <p><strong>Setor/Leito:</strong> ${dadosTermo.setor} - ${dadosTermo.leito}</p>
-            <p><strong>Paciente consciente/orientado:</strong> ${dadosTermo.consciente}</p>
-        </div>
-
-        <div class="section">
-            <div class="section-title">RESPONSÁVEL PELO ARMÁRIO</div>
-            <p><strong>Nome:</strong> ${dadosTermo.acompanhante}</p>
-            <p><strong>Telefone:</strong> ${dadosTermo.telefone || 'Não informado'}</p>
-            <p><strong>Documento:</strong> ${dadosTermo.documento || 'Não informado'}</p>
-            <p><strong>Parentesco:</strong> ${dadosTermo.parentesco || 'Não informado'}</p>
-        </div>
-
-        <div class="section">
-            <div class="section-title">VOLUMES ARMAZENADOS</div>
-            <div class="volumes-list">
-  `;
-  
-  // Adicionar volumes
-  if (dadosTermo.volumes && Array.isArray(dadosTermo.volumes)) {
-    dadosTermo.volumes.forEach(function(volume) {
-      html += `<p>${volume.quantidade || 0}x - ${volume.descricao || ''}</p>`;
-    });
+  var hospitalNome = 'Hospital Universitário do Ceará';
+  var orientacoesPredefinidas = [
+    'Seus pertences estão sob sua guarda e responsabilidade.',
+    'Em piora clínica, os pertences serão recolhidos e protocolados no NAC.',
+    'Após 15 dias da alta/transferência, itens não retirados poderão ser descartados conforme normas.'
+  ];
+  var orientacoes = [];
+  if (Array.isArray(dadosTermo.orientacoes) && dadosTermo.orientacoes.length) {
+    orientacoes = dadosTermo.orientacoes.map(function(item) {
+      switch (item) {
+        case 'ori1':
+          return orientacoesPredefinidas[0];
+        case 'ori2':
+          return orientacoesPredefinidas[1];
+        case 'ori3':
+          return orientacoesPredefinidas[2];
+        default:
+          return item;
+      }
+    }).filter(function(texto) { return texto && texto.trim(); });
   }
-  
-  html += `
-            </div>
-        </div>
+  if (!orientacoes.length) {
+    orientacoes = orientacoesPredefinidas;
+  }
 
-        <div class="section">
-            <div class="section-title">DECLARAÇÕES E ORIENTAÇÕES</div>
-            <p>Declaro estar ciente e de acordo com as seguintes orientações:</p>
-            <ul>
-                <li>Seus pertences estão sob sua guarda e responsabilidade</li>
-                <li>Em piora clínica, os pertences serão recolhidos e protocolados no NAC</li>
-                <li>Após 15 dias da alta/transferência, itens não retirados poderão ser descartados conforme normas</li>
-            </ul>
-        </div>
+  var volumesLista = Array.isArray(dadosTermo.volumes) ? dadosTermo.volumes : [];
+  var movimentacoesLista = Array.isArray(dadosTermo.movimentacoes) ? dadosTermo.movimentacoes : [];
 
-        <div class="assinatura-area">
-            <div class="section-title">ASSINATURA DO RESPONSÁVEL</div>
-  `;
-  
-  // Adicionar assinatura se existir
-  if (dadosTermo.assinaturaBase64) {
-    html += `<img src="data:image/png;base64,${dadosTermo.assinaturaBase64}" class="assinatura-img" />`;
+  function formatarMovimentacao(mov) {
+    var data = mov.data ? new Date(mov.data) : null;
+    var hora = mov.hora ? new Date('1970-01-01T' + mov.hora + 'Z') : null;
+    var dataFormatada = data && !isNaN(data.getTime())
+      ? Utilities.formatDate(data, 'America/Sao_Paulo', 'dd/MM/yyyy')
+      : (mov.data || '');
+    var horaFormatada = mov.hora
+      ? mov.hora
+      : (hora && !isNaN(hora.getTime())
+          ? Utilities.formatDate(hora, 'America/Sao_Paulo', 'HH:mm')
+          : '');
+    return {
+      data: dataFormatada,
+      hora: horaFormatada,
+      tipo: (mov.tipo || '').toString().toUpperCase(),
+      descricao: mov.descricao || '',
+      responsavel: mov.responsavel || ''
+    };
+  }
+
+  var movimentosNormalizados = movimentacoesLista.map(formatarMovimentacao);
+  while (movimentosNormalizados.length < 8) {
+    movimentosNormalizados.push({ data: '', hora: '', tipo: '', descricao: '', responsavel: '' });
+  }
+
+  var assinaturaInicialHtml = dadosTermo.assinaturaInicial
+    ? '<img src="data:image/png;base64,' + dadosTermo.assinaturaInicial + '" class="assinatura-img" alt="Assinatura inicial" />'
+    : '<div class="assinatura-linha">Assinatura não registrada digitalmente.</div>';
+
+  var assinaturaFinalHtml = '';
+  if (dadosTermo.metodoFinal === 'cpf' && dadosTermo.cpfFinal) {
+    assinaturaFinalHtml = '<div class="assinatura-linha">Confirmação por CPF: ' + dadosTermo.cpfFinal + '</div>';
+  } else if (dadosTermo.assinaturaFinal) {
+    assinaturaFinalHtml = '<img src="data:image/png;base64,' + dadosTermo.assinaturaFinal + '" class="assinatura-img" alt="Assinatura final" />';
   } else {
-    html += `<p>Assinatura digital registrada no sistema</p>`;
+    assinaturaFinalHtml = '<div class="assinatura-linha">Assinatura final não registrada.</div>';
   }
-  
-  html += `
-            <p><strong>Nome:</strong> ${dadosTermo.acompanhante}</p>
-            <p><strong>Data/Hora:</strong> ${Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')}</p>
-        </div>
 
-        <div class="footer">
-            <p>Documento gerado automaticamente em ${Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')}</p>
-            <p>Hospital Central - Sistema de Controle de Armários</p>
-        </div>
-    </body>
-    </html>
-  `;
-  
-  return html;
+  var partes = [];
+  partes.push('<!DOCTYPE html>');
+  partes.push('<html>');
+  partes.push('<head>');
+  partes.push('<base target="_top">');
+  partes.push('<style>');
+  partes.push('  body { font-family: Arial, sans-serif; margin: 24px; color: #0b1324; }');
+  partes.push('  h1, h2, h3 { margin: 0; }');
+  partes.push('  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0b1324; padding-bottom: 12px; margin-bottom: 16px; }');
+  partes.push('  .header h1 { font-size: 20px; text-transform: uppercase; }');
+  partes.push('  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 24px; margin-bottom: 16px; font-size: 13px; }');
+  partes.push('  .section-title { font-weight: bold; text-transform: uppercase; font-size: 13px; margin: 18px 0 8px; }');
+  partes.push('  .orientacoes { font-size: 12px; margin-left: 18px; }');
+  partes.push('  .volumes-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }');
+  partes.push('  .volumes-table th, .volumes-table td { border: 1px solid #0b1324; padding: 6px; text-align: left; }');
+  partes.push('  .assinatura-box { margin-top: 20px; text-align: center; }');
+  partes.push('  .assinatura-img { max-width: 260px; max-height: 120px; border: 1px solid #d0d7e2; padding: 6px; }');
+  partes.push('  .assinatura-linha { border-bottom: 1px solid #0b1324; display: inline-block; padding: 4px 16px; min-width: 240px; font-size: 12px; }');
+  partes.push('  .footer { margin-top: 18px; font-size: 10px; text-align: center; color: #3d4a63; }');
+  partes.push('  .page-break { page-break-before: always; }');
+  partes.push('  .mov-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }');
+  partes.push('  .mov-table th, .mov-table td { border: 1px solid #0b1324; padding: 5px; vertical-align: top; }');
+  partes.push('  .mov-table th { background: #eef3fb; }');
+  partes.push('  .devolucao-box, .descarte-box { border: 1px solid #0b1324; padding: 10px; margin-top: 10px; min-height: 70px; }');
+  partes.push('  .observacoes { border: 1px solid #0b1324; min-height: 90px; margin-top: 12px; padding: 8px; font-size: 12px; }');
+  partes.push('  .label { font-weight: bold; }');
+  partes.push('</style>');
+  partes.push('</head>');
+  partes.push('<body>');
+  partes.push('<div class="header">');
+  partes.push('  <div>');
+  partes.push('    <h1>Termo de Responsabilidade</h1>');
+  partes.push('    <h3>' + hospitalNome + '</h3>');
+  partes.push('  </div>');
+  partes.push('  <div style="text-align:right;font-size:12px;">');
+  partes.push('    <div><strong>Nº do Armário:</strong> ' + (dadosTermo.numeroArmario || '') + '</div>');
+  partes.push('    <div><strong>Data de início:</strong> ' + formatarDataParaHTML(dadosTermo.aplicadoEm) + '</div>');
+  partes.push('  </div>');
+  partes.push('</div>');
+  partes.push('<div class="section-title">Dados do Paciente</div>');
+  partes.push('<div class="info-grid">');
+  partes.push('  <div><span class="label">Nome:</span> ' + (dadosTermo.paciente || '') + '</div>');
+  partes.push('  <div><span class="label">Prontuário:</span> ' + (dadosTermo.prontuario || '') + '</div>');
+  partes.push('  <div><span class="label">Data de nascimento:</span> ' + formatarDataParaHTML(dadosTermo.nascimento) + '</div>');
+  partes.push('  <div><span class="label">Setor/Leito:</span> ' + (dadosTermo.setor || '') + ' ' + (dadosTermo.leito || '') + '</div>');
+  partes.push('  <div><span class="label">Paciente consciente/orientado:</span> ' + (dadosTermo.consciente || '') + '</div>');
+  partes.push('</div>');
+  partes.push('<div class="section-title">Responsável pelo Armário</div>');
+  partes.push('<div class="info-grid">');
+  partes.push('  <div><span class="label">Nome:</span> ' + (dadosTermo.acompanhante || '') + '</div>');
+  partes.push('  <div><span class="label">Documento:</span> ' + (dadosTermo.documento || 'Não informado') + '</div>');
+  partes.push('  <div><span class="label">Telefone:</span> ' + (dadosTermo.telefone || 'Não informado') + '</div>');
+  partes.push('  <div><span class="label">Parentesco:</span> ' + (dadosTermo.parentesco || 'Não informado') + '</div>');
+  partes.push('</div>');
+  partes.push('<div class="section-title">Orientações repassadas</div>');
+  partes.push('<ul class="orientacoes">');
+  orientacoes.forEach(function(item) {
+    partes.push('<li>' + item + '</li>');
+  });
+  partes.push('</ul>');
+  partes.push('<div class="section-title">Volumes armazenados</div>');
+  partes.push('<table class="volumes-table">');
+  partes.push('  <thead><tr><th style="width:20%">Quantidade</th><th>Descrição</th></tr></thead>');
+  partes.push('  <tbody>');
+  if (volumesLista.length) {
+    volumesLista.forEach(function(volume) {
+      partes.push('<tr><td>' + (volume.quantidade || '') + '</td><td>' + (volume.descricao || '') + '</td></tr>');
+    });
+  } else {
+    partes.push('<tr><td colspan="2">Sem volumes informados.</td></tr>');
+  }
+  partes.push('  </tbody>');
+  partes.push('</table>');
+  partes.push('<div class="assinatura-box">');
+  partes.push('  <div class="section-title">Assinatura do responsável - Etapa inicial</div>');
+  partes.push(assinaturaInicialHtml);
+  partes.push('  <div style="margin-top:6px; font-size:12px;">' + (dadosTermo.acompanhante || '') + '</div>');
+  partes.push('</div>');
+  partes.push('<div class="footer">Primeira etapa concluída em ' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm') + '.</div>');
+  partes.push('<div class="page-break"></div>');
+  partes.push('<div class="section-title">Movimentações registradas</div>');
+  partes.push('<table class="mov-table">');
+  partes.push('  <thead><tr><th style="width:16%">Data</th><th style="width:12%">Hora</th><th style="width:18%">Tipo</th><th>Descrição</th><th style="width:20%">Responsável</th></tr></thead>');
+  partes.push('  <tbody>');
+  movimentosNormalizados.forEach(function(mov) {
+    partes.push('<tr><td>' + (mov.data || '') + '</td><td>' + (mov.hora || '') + '</td><td>' + (mov.tipo || '') + '</td><td>' + (mov.descricao || '') + '</td><td>' + (mov.responsavel || '') + '</td></tr>');
+  });
+  partes.push('  </tbody>');
+  partes.push('</table>');
+  partes.push('<div class="section-title">Devolução de pertences</div>');
+  partes.push('<div class="devolucao-box">Data: _____________ &nbsp;&nbsp; Conferente: __________________________</div>');
+  partes.push('<div class="section-title">Descarte de pertences</div>');
+  partes.push('<div class="descarte-box">');
+  partes.push('  <p>Declaramos que o descarte dos devidos esclarecimentos por parte da equipe do ' + hospitalNome + ' sobre os pertences deixados pelo paciente.</p>');
+  partes.push('  <p>Informamos que o Núcleo Ético Clínica está ciente dos procedimentos adotados. O ato da entrega está acompanhado por dois colaboradores designados para este fim.</p>');
+  partes.push('</div>');
+  partes.push('<div class="section-title">Observações complementares</div>');
+  partes.push('<div class="observacoes"></div>');
+  partes.push('<div class="assinatura-box">');
+  partes.push('  <div class="section-title">Assinatura de encerramento</div>');
+  partes.push(assinaturaFinalHtml);
+  partes.push('  <div style="margin-top:6px; font-size:12px;">' + (dadosTermo.acompanhante || '') + '</div>');
+  partes.push('  <div style="margin-top:4px; font-size:11px;">Encerrado em: ' + formatarDataParaHTML(dadosTermo.finalizadoEm) + '</div>');
+  partes.push('</div>');
+  partes.push('<div class="footer">Documento gerado automaticamente em ' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm') + ' - ' + hospitalNome + '.</div>');
+  partes.push('</body>');
+  partes.push('</html>');
+
+  return partes.join('');
 }
+
 
 function formatarDataParaHTML(data) {
   if (!data) return 'Não informada';
