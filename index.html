@@ -267,7 +267,8 @@
             margin-bottom: 30px;
         }
         .card {
-            background-color: var(--surface-color);
+            background: color-mix(in srgb, var(--dark-color) 92%, black 8%);
+            color: var(--light-color);
             border-radius: 14px;
             box-shadow: 0 12px 28px var(--shadow-color);
             padding: 20px;
@@ -281,7 +282,7 @@
             border-top: 4px solid var(--success-color);
         }
         .card.em-uso {
-            border-top: 4px solid var(--secondary-color);
+            border-top: 4px solid var(--primary-color);
         }
         .card.proximo {
             border-top: 4px solid var(--warning-color);
@@ -298,24 +299,25 @@
         .card-title {
             font-size: 1rem;
             font-weight: 600;
-            color: var(--dark-color);
+            color: var(--light-color);
         }
         .card-icon {
             font-size: 1.6rem;
             color: var(--primary-color);
         }
         .card.livre .card-icon   { color: var(--success-color); }
-        .card.em-uso .card-icon  { color: var(--secondary-color); }
+        .card.em-uso .card-icon  { color: var(--primary-color); }
         .card.proximo .card-icon { color: var(--warning-color); }
         .card.vencido .card-icon { color: var(--danger-color); }
         .card-value {
             font-size: 2rem;
             font-weight: bold;
             margin-bottom: 5px;
+            color: var(--light-color);
         }
         .card-description {
             font-size: 0.9rem;
-            color: var(--muted-color);
+            color: color-mix(in srgb, white 65%, transparent);
         }
         /* Filtros */
         .filters {
@@ -353,7 +355,7 @@
             border-left: 4px solid var(--success-color);
         }
         .armario-card.em-uso {
-            border-left-color: var(--secondary-color);
+            border-left-color: var(--primary-color);
         }
         .armario-card.proximo {
             border-left-color: var(--warning-color);
@@ -387,8 +389,8 @@
             color: var(--success-color);
         }
         .status-em-uso {
-            background-color: color-mix(in srgb, var(--secondary-color) 18%, transparent);
-            color: var(--secondary-color);
+            background-color: color-mix(in srgb, var(--primary-color) 18%, transparent);
+            color: var(--primary-color);
         }
         .status-proximo {
             background-color: color-mix(in srgb, var(--warning-color) 20%, transparent);
@@ -1192,14 +1194,6 @@
             <div class="page active" id="dashboard">
                 <!-- Cards Hero -->
                 <div class="cards-hero">
-                    <div class="card livre">
-                        <div class="card-header">
-                            <div class="card-title">Livres</div>
-                            <div class="card-icon"><i class="fas fa-check-circle"></i></div>
-                        </div>
-                        <div class="card-value" id="livres-count">0</div>
-                        <div class="card-description">Armários disponíveis</div>
-                    </div>
                     <div class="card em-uso">
                         <div class="card-header">
                             <div class="card-title">Em uso</div>
@@ -1207,6 +1201,14 @@
                         </div>
                         <div class="card-value" id="em-uso-count">0</div>
                         <div class="card-description">Armários ocupados</div>
+                    </div>
+                    <div class="card livre">
+                        <div class="card-header">
+                            <div class="card-title">Livres</div>
+                            <div class="card-icon"><i class="fas fa-check-circle"></i></div>
+                        </div>
+                        <div class="card-value" id="livres-count">0</div>
+                        <div class="card-description">Armários disponíveis</div>
                     </div>
                     <div class="card proximo">
                         <div class="card-header">
@@ -1895,7 +1897,8 @@
             termos: {},
             movimentacoes: {},
             usuarios: [],
-            logs: []
+            logs: [],
+            carregamentoTermosId: 0
         };
         // Elementos DOM
         const elementos = {
@@ -2521,9 +2524,18 @@
         }
         async function carregarTabelaTermos() {
             if (!elementos.tabelaTermosBody) return;
+
+            const carregamentoId = ++estado.carregamentoTermosId;
+            const tbody = elementos.tabelaTermosBody;
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:#5b6b86;">Carregando termos...</td></tr>';
+
             const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
-            if (!resultado.success) return;
-            elementos.tabelaTermosBody.innerHTML = '';
+            if (estado.carregamentoTermosId !== carregamentoId) return;
+
+            if (!resultado.success) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:#c0392b;">Erro ao carregar termos.</td></tr>';
+                return;
+            }
 
             const armariosComTermo = resultado.data
                 .filter(a => a.status !== 'livre')
@@ -2535,16 +2547,17 @@
                 });
 
             if (!armariosComTermo.length) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = '<td colspan="8" style="text-align:center; padding:16px; color:#5b6b86;">Nenhum termo ativo ou pendente no momento.</td>';
-                elementos.tabelaTermosBody.appendChild(tr);
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:#5b6b86;">Nenhum termo ativo ou pendente no momento.</td></tr>';
                 return;
             }
 
+            const linhas = [];
+
             for (const armario of armariosComTermo) {
                 const pendente = !armario.termoAplicado;
-                const tr = document.createElement('tr');
                 const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
+                if (estado.carregamentoTermosId !== carregamentoId) return;
+
                 const numMovimentacoes = movResultado.success ? movResultado.data.length : 0;
                 const aplicadoEm = !pendente && armario.dataRegistro ? formatarData(armario.dataRegistro) : '-';
                 const pdfColuna = pendente
@@ -2562,20 +2575,25 @@
                         <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
                     `;
 
-                tr.innerHTML = `
-                    <td>${armario.numero}</td>
-                    <td>${armario.nomeVisitante || '-'}</td>
-                    <td>${armario.nomePaciente || '-'}</td>
-                    <td><span class="status-label ${pendente ? 'pendente' : 'aplicado'}">${pendente ? 'Pendente' : 'Aplicado'}</span></td>
-                    <td>${aplicadoEm}</td>
-                    <td>${numMovimentacoes} registro(s)</td>
-                    <td>${pdfColuna}</td>
-                    <td>${botoesAcao}</td>
-                `;
-                elementos.tabelaTermosBody.appendChild(tr);
+                linhas.push(`
+                    <tr>
+                        <td>${armario.numero}</td>
+                        <td>${armario.nomeVisitante || '-'}</td>
+                        <td>${armario.nomePaciente || '-'}</td>
+                        <td><span class="status-label ${pendente ? 'pendente' : 'aplicado'}">${pendente ? 'Pendente' : 'Aplicado'}</span></td>
+                        <td>${aplicadoEm}</td>
+                        <td>${numMovimentacoes} registro(s)</td>
+                        <td>${pdfColuna}</td>
+                        <td>${botoesAcao}</td>
+                    </tr>
+                `);
             }
+
+            if (estado.carregamentoTermosId !== carregamentoId) return;
+            tbody.innerHTML = linhas.join('');
         }
-async function carregarCadastroArmarios(unidadeFiltro) {
+
+        async function carregarCadastroArmarios(unidadeFiltro) {
             const tbody = document.querySelector('#tabela-cadastro-armarios tbody');
             if (!tbody) return;
             const resultado = await callGoogleScript('getCadastroArmarios');
