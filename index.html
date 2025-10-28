@@ -954,6 +954,47 @@
             color: white;
             box-shadow: 0 12px 24px color-mix(in srgb, var(--primary-color) 45%, transparent);
         }
+        .status-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            background-color: rgba(59, 130, 246, 0.12);
+            color: var(--primary-color);
+        }
+        .status-label.aplicado {
+            background-color: rgba(16, 185, 129, 0.14);
+            color: var(--secondary-color);
+        }
+        .status-label.pendente {
+            background-color: rgba(245, 158, 11, 0.14);
+            color: var(--warning-color);
+        }
+        .text-muted {
+            color: var(--muted-color);
+        }
+        .loading-state {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px;
+            color: var(--muted-color);
+            font-weight: 500;
+        }
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid var(--primary-color);
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 0.6s linear infinite;
+        }
         .btn-primary:hover {
             background-color: color-mix(in srgb, var(--primary-color) 85%, var(--primary-dark) 15%);
             box-shadow: 0 18px 32px color-mix(in srgb, var(--primary-color) 35%, transparent);
@@ -1324,8 +1365,8 @@
             <div class="page" id="termo-responsabilidade">
                 <div class="data-table">
                     <div class="table-header">
-                        <h3>Termos de Responsabilidade Ativos</h3>
-                        <p style="color:#5b6b86; font-size:0.9rem;">Apenas armários de acompanhantes com termo aplicado aparecem nesta lista.</p>
+                        <h3>Termos de Responsabilidade</h3>
+                        <p style="color:#5b6b86; font-size:0.9rem;">Consulte termos aplicados e pendentes dos armários de acompanhantes em uso.</p>
                     </div>
                     <div class="table-container">
                         <table id="tabela-termos">
@@ -1334,6 +1375,7 @@
                                     <th>Armário</th>
                                     <th>Acompanhante</th>
                                     <th>Paciente</th>
+                                    <th>Status</th>
                                     <th>Aplicado em</th>
                                     <th>Movimentações</th>
                                     <th>PDF</th>
@@ -2479,43 +2521,61 @@
         }
         async function carregarTabelaTermos() {
             if (!elementos.tabelaTermosBody) return;
-            // Buscar armários de acompanhantes com termo aplicado
             const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
             if (!resultado.success) return;
             elementos.tabelaTermosBody.innerHTML = '';
-           
-            const armariosComTermo = resultado.data.filter(a => a.status === 'em-uso' && a.termoAplicado);
+
+            const armariosComTermo = resultado.data
+                .filter(a => a.status !== 'livre')
+                .sort((a, b) => {
+                    if (a.termoAplicado === b.termoAplicado) {
+                        return new Date(b.dataRegistro || 0) - new Date(a.dataRegistro || 0);
+                    }
+                    return a.termoAplicado ? 1 : -1;
+                });
+
             if (!armariosComTermo.length) {
                 const tr = document.createElement('tr');
-                tr.innerHTML = '<td colspan="7" style="text-align:center; padding:16px; color:#5b6b86;">Nenhum termo ativo no momento.</td>';
+                tr.innerHTML = '<td colspan="8" style="text-align:center; padding:16px; color:#5b6b86;">Nenhum termo ativo ou pendente no momento.</td>';
                 elementos.tabelaTermosBody.appendChild(tr);
                 return;
             }
-            // Para cada armário, buscar detalhes do termo
+
             for (const armario of armariosComTermo) {
+                const pendente = !armario.termoAplicado;
                 const tr = document.createElement('tr');
-               
-                // Buscar movimentações
                 const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
                 const numMovimentacoes = movResultado.success ? movResultado.data.length : 0;
-               
+                const aplicadoEm = !pendente && armario.dataRegistro ? formatarData(armario.dataRegistro) : '-';
+                const pdfColuna = pendente
+                    ? '<span class="text-muted">Indisponível</span>'
+                    : `<a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a>`;
+                const botoesAcao = pendente
+                    ? `
+                        <button class="btn-small btn-primary" data-action="aplicar" data-id="${armario.id}">Aplicar termo</button>
+                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                        <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
+                    `
+                    : `
+                        <button class="btn-small btn-primary" data-action="ver" data-id="${armario.id}">Ver termo</button>
+                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                        <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
+                    `;
+
                 tr.innerHTML = `
                     <td>${armario.numero}</td>
                     <td>${armario.nomeVisitante || '-'}</td>
                     <td>${armario.nomePaciente || '-'}</td>
-                    <td>${formatarData(armario.dataRegistro)}</td>
+                    <td><span class="status-label ${pendente ? 'pendente' : 'aplicado'}">${pendente ? 'Pendente' : 'Aplicado'}</span></td>
+                    <td>${aplicadoEm}</td>
                     <td>${numMovimentacoes} registro(s)</td>
-                    <td><a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a></td>
-                    <td>
-                        <button class="btn-small btn-primary" data-action="ver" data-id="${armario.id}">Ver termo</button>
-                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
-                        <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
-                    </td>
+                    <td>${pdfColuna}</td>
+                    <td>${botoesAcao}</td>
                 `;
                 elementos.tabelaTermosBody.appendChild(tr);
             }
         }
-        async function carregarCadastroArmarios(unidadeFiltro) {
+async function carregarCadastroArmarios(unidadeFiltro) {
             const tbody = document.querySelector('#tabela-cadastro-armarios tbody');
             if (!tbody) return;
             const resultado = await callGoogleScript('getCadastroArmarios');
@@ -3248,16 +3308,23 @@
                 mostrarPassoTermo(novoIndice);
             }
         }
-        function avancarOuAplicarTermo() {
+        async function avancarOuAplicarTermo(evento) {
             if (!validarPassoTermo(termoPassoAtual)) {
                 return;
             }
             if (termoPassoAtual < termoSteps.length - 1) {
                 mostrarPassoTermo(termoPassoAtual + 1);
-            } else {
-                aplicarTermo();
+                return;
+            }
+            const botao = evento?.currentTarget || elementos.termoBtnAvancar;
+            const finalizar = iniciarLoadingBotao(botao);
+            try {
+                await aplicarTermo();
+            } finally {
+                finalizar();
             }
         }
+
         async function aplicarTermo() {
             if (termoArmarioAtual === null) return;
             // Capturar a assinatura do canvas
@@ -3315,12 +3382,23 @@
             const iso = agora.toISOString();
             elementos.movData.value = iso.slice(0, 10);
             elementos.movHora.value = iso.slice(11, 16);
-            await renderizarMovimentacoes(id);
             elementos.movimentacaoModal.style.display = 'flex';
+            mostrarLoadingMovimentacoes();
+            await renderizarMovimentacoes(id);
         }
+
         function fecharMovimentacaoModal() {
             elementos.movimentacaoModal.style.display = 'none';
             movimentacaoArmarioAtual = null;
+        }
+        function mostrarLoadingMovimentacoes() {
+            if (!elementos.movimentacoesList) return;
+            elementos.movimentacoesList.innerHTML = `
+                <div class="loading-state">
+                    <span class="loading-spinner"></span>
+                    Carregando movimentações...
+                </div>
+            `;
         }
         function formatarTituloMovimento(tipo) {
             const mapa = {
@@ -3331,8 +3409,17 @@
             return mapa[tipo] || tipo;
         }
         async function renderizarMovimentacoes(id) {
+            if (!elementos.movimentacoesList) return;
             const resultado = await callGoogleScript('getMovimentacoes', { armarioId: id });
-            if (!resultado.success) return;
+            if (!resultado.success) {
+                elementos.movimentacoesList.innerHTML = '';
+                const erro = document.createElement('div');
+                erro.className = 'info-box';
+                erro.textContent = 'Não foi possível carregar as movimentações.';
+                elementos.movimentacoesList.appendChild(erro);
+                notificarErroPadrao(resultado);
+                return;
+            }
             const lista = resultado.data;
             elementos.movimentacoesList.innerHTML = '';
             if (!lista.length) {
@@ -3358,6 +3445,7 @@
                 elementos.movimentacoesList.appendChild(bloco);
             });
         }
+
         async function salvarMovimentacao() {
             if (!movimentacaoArmarioAtual) return;
             const dados = {
@@ -3382,29 +3470,44 @@
                 notificarErroPadrao(resultado);
             }
         }
-        function tratarAcaoTermo(evento) {
-            const botao = evento.target.closest('button[data-action]');
-            if (!botao) return;
-            const id = parseInt(botao.dataset.id, 10);
+        async function tratarAcaoTermo(evento) {
+            const elementoAcao = evento.target.closest('[data-action]');
+            if (!elementoAcao) return;
+            const acao = elementoAcao.dataset.action;
+            const id = parseInt(elementoAcao.dataset.id, 10);
             if (Number.isNaN(id)) return;
-            switch (botao.dataset.action) {
-                case 'ver':
-                    exibirResumoTermo(id);
-                    break;
-                case 'mov':
-                    abrirMovimentacoes(id);
-                    break;
-                case 'encerrar':
-                    abrirModalLiberacao(id, 'acompanhante');
-                    break;
-                case 'ver-pdf':
-                    evento.preventDefault();
-                    verPDFTermo(id);
-                    break;
-                default:
-                    break;
+
+            let finalizarLoading = () => {};
+            if (elementoAcao.tagName === 'BUTTON') {
+                finalizarLoading = iniciarLoadingBotao(elementoAcao);
+            }
+
+            try {
+                switch (acao) {
+                    case 'ver':
+                        await exibirResumoTermo(id);
+                        break;
+                    case 'mov':
+                        await abrirMovimentacoes(id);
+                        break;
+                    case 'encerrar':
+                        await abrirModalLiberacao(id, 'acompanhante');
+                        break;
+                    case 'ver-pdf':
+                        evento.preventDefault();
+                        await verPDFTermo(id);
+                        break;
+                    case 'aplicar':
+                        abrirTermoWizard(id);
+                        break;
+                    default:
+                        break;
+                }
+            } finally {
+                finalizarLoading();
             }
         }
+
         async function exibirResumoTermo(id) {
             const armario = obterArmarioPorId(id);
             if (!armario) {
