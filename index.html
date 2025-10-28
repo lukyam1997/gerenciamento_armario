@@ -888,6 +888,11 @@
             margin-bottom: 5px;
             font-weight: 500;
         }
+        .field-hint {
+            font-size: 0.8rem;
+            color: var(--muted-color);
+            margin-top: 4px;
+        }
         .form-control {
             width: 100%;
             padding: 10px;
@@ -1484,6 +1489,7 @@
                     <div class="form-group" id="hora-prevista-group">
                         <label for="hora-prevista">Hora Prevista de Saída</label>
                         <input type="time" id="hora-prevista" class="form-control" required>
+                        <div class="field-hint">Horário preenchido automaticamente para 1 hora após o cadastro.</div>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
@@ -1668,6 +1674,24 @@
                                             <button type="button" class="btn btn-ghost" id="termo-add-volume">+ Adicionar volume</button>
                                             <span class="wizard-hint">Informe a quantidade e descreva cada volume guardado.</span>
                                         </div>
+                                        <datalist id="termo-itens-sugestoes">
+                                            <option value="Mochila"></option>
+                                            <option value="Bolsa"></option>
+                                            <option value="Sacola reutilizável"></option>
+                                            <option value="Sacola plástica"></option>
+                                            <option value="Mala pequena"></option>
+                                            <option value="Mala de rodinhas"></option>
+                                            <option value="Frasqueira"></option>
+                                            <option value="Caixa organizadora"></option>
+                                            <option value="Envelope com documentos"></option>
+                                            <option value="Notebook"></option>
+                                            <option value="Tablet"></option>
+                                            <option value="Celular"></option>
+                                            <option value="Carregador"></option>
+                                            <option value="Chaveiro"></option>
+                                            <option value="Carteira"></option>
+                                            <option value="Outros itens"></option>
+                                        </datalist>
                                         <div class="wizard-error">Informe ao menos um volume com quantidade e descrição.</div>
                                     </div>
                                 </div>
@@ -1921,23 +1945,50 @@
             try {
                 const formData = new FormData();
                 formData.append('action', action);
-               
+
                 // Adicionar dados ao formData
                 Object.keys(data).forEach(key => {
-                    formData.append(key, data[key]);
+                    const valor = data[key];
+                    if (valor === undefined || valor === null) {
+                        formData.append(key, '');
+                    } else if (valor instanceof Date) {
+                        formData.append(key, valor.toISOString());
+                    } else if (typeof valor === 'object') {
+                        formData.append(key, JSON.stringify(valor));
+                    } else {
+                        formData.append(key, valor);
+                    }
                 });
-               
+
                 const response = await fetch(SCRIPT_URL, {
                     method: 'POST',
                     body: formData
                 });
-               
-                const result = await response.json();
-                return result;
+                if (!response.ok) {
+                    const mensagem = `Erro ${response.status} ao comunicar com o servidor (ação: ${action})`;
+                    console.error(mensagem);
+                    mostrarErro(mensagem);
+                    return { success: false, error: mensagem, _erroNotificado: true };
+                }
+                const textoResposta = await response.text();
+                if (!textoResposta) {
+                    const mensagem = `Resposta vazia do servidor (ação: ${action})`;
+                    console.error(mensagem);
+                    mostrarErro(mensagem);
+                    return { success: false, error: mensagem, _erroNotificado: true };
+                }
+                try {
+                    return JSON.parse(textoResposta);
+                } catch (parseError) {
+                    console.error(`Falha ao interpretar a resposta da ação ${action}:`, parseError, textoResposta);
+                    const mensagem = `Resposta inválida do servidor (ação: ${action})`;
+                    mostrarErro(mensagem);
+                    return { success: false, error: mensagem, _erroNotificado: true };
+                }
             } catch (error) {
                 console.error('Erro ao chamar Google Script:', error);
                 mostrarErro('Erro de conexão com o servidor');
-                return { success: false, error: error.message };
+                return { success: false, error: error.message, _erroNotificado: true };
             }
         }
         async function carregarDadosIniciais() {
@@ -2062,6 +2113,20 @@
                 icon: 'success',
                 confirmButtonText: 'OK'
             });
+        }
+        function notificarErroPadrao(resultado, mensagemPadrao = 'Ocorreu um erro inesperado') {
+            if (!resultado || resultado._erroNotificado) {
+                return;
+            }
+            const mensagem = resultado.error || mensagemPadrao;
+            mostrarErro(mensagem);
+        }
+        function calcularHoraPrevistaSaida() {
+            const agora = new Date();
+            agora.setHours(agora.getHours() + 1);
+            const horas = String(agora.getHours()).padStart(2, '0');
+            const minutos = String(agora.getMinutes()).padStart(2, '0');
+            return `${horas}:${minutos}`;
         }
         // Configuração de eventos
         function inicializarEventos() {
@@ -2597,7 +2662,7 @@
                     confirmButtonText: 'OK'
                 });
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         async function abrirModalNovaUnidade() {
@@ -2637,7 +2702,7 @@
                     confirmButtonText: 'OK'
                 });
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         // Abrir modal para cadastro/edição de armário
@@ -2653,8 +2718,12 @@
                 elementos.horaPrevistaGroup.style.display = exigeHoraPrevista ? 'block' : 'none';
                 elementos.horaPrevistaInput.required = exigeHoraPrevista;
                 elementos.horaPrevistaInput.disabled = !exigeHoraPrevista;
-                if (!exigeHoraPrevista) {
+                if (exigeHoraPrevista) {
+                    elementos.horaPrevistaInput.value = calcularHoraPrevistaSaida();
+                    elementos.horaPrevistaInput.readOnly = true;
+                } else {
                     elementos.horaPrevistaInput.value = '';
+                    elementos.horaPrevistaInput.readOnly = false;
                 }
                 const whatsappInput = document.getElementById('whatsapp-contato');
                 if (whatsappInput) {
@@ -2856,7 +2925,7 @@
                     confirmButtonText: 'OK'
                 });
             } else {
-                mostrarErro(cadastroResultado.error);
+                notificarErroPadrao(cadastroResultado);
             }
         }
         // Abrir modal para novo usuário
@@ -2874,36 +2943,46 @@
         }
         // Salvar armário (cadastro)
         async function salvarArmario() {
-            const id = parseInt(elementos.armarioForm.dataset.id);
-            const tipo = elementos.armarioForm.dataset.tipo || 'visitante';
-            const numeroArmario = elementos.armarioForm.dataset.numero || '';
-            const dados = {
-                id: id,
-                numero: numeroArmario,
-                nomeVisitante: document.getElementById('nome-visitante').value.trim(),
-                nomePaciente: document.getElementById('nome-paciente').value.trim(),
-                leito: document.getElementById('leito').value.trim(),
-                whatsapp: document.getElementById('whatsapp-contato').value.trim(),
-                volumes: parseInt(document.getElementById('volumes').value, 10),
-                horaPrevista: tipo === 'visitante' ? document.getElementById('hora-prevista').value : '',
-                tipo: tipo
-            };
-            const resultado = await callGoogleScript('cadastrarArmario', dados);
-            if (resultado.success) {
-                fecharModalArmario();
-               
-                // Recarregar dados
-                await carregarArmarios();
-                await carregarEstatisticas();
-                atualizarInterface();
-                carregarDadosTabelas();
-                if (tipo === 'acompanhante') {
-                    abrirTermoWizard(resultado.id);
-                } else {
-                    mostrarSucesso('Armário cadastrado com sucesso');
+            const botaoSalvar = document.getElementById('btn-salvar');
+            const finalizarLoading = iniciarLoadingBotao(botaoSalvar);
+            try {
+                const id = parseInt(elementos.armarioForm.dataset.id);
+                const tipo = elementos.armarioForm.dataset.tipo || 'visitante';
+                const numeroArmario = elementos.armarioForm.dataset.numero || '';
+                let volumesInformados = parseInt(document.getElementById('volumes').value, 10);
+                if (Number.isNaN(volumesInformados) || volumesInformados < 0) {
+                    volumesInformados = 0;
                 }
-            } else {
-                mostrarErro(resultado.error);
+                const dados = {
+                    id: id,
+                    numero: numeroArmario,
+                    nomeVisitante: document.getElementById('nome-visitante').value.trim(),
+                    nomePaciente: document.getElementById('nome-paciente').value.trim(),
+                    leito: document.getElementById('leito').value.trim(),
+                    whatsapp: document.getElementById('whatsapp-contato').value.trim(),
+                    volumes: volumesInformados,
+                    horaPrevista: tipo === 'visitante' ? document.getElementById('hora-prevista').value : '',
+                    tipo: tipo
+                };
+                const resultado = await callGoogleScript('cadastrarArmario', dados);
+                if (resultado.success) {
+                    fecharModalArmario();
+
+                    // Recarregar dados
+                    await carregarArmarios();
+                    await carregarEstatisticas();
+                    atualizarInterface();
+                    carregarDadosTabelas();
+                    if (tipo === 'acompanhante') {
+                        abrirTermoWizard(resultado.id);
+                    } else {
+                        mostrarSucesso('Armário cadastrado com sucesso');
+                    }
+                } else {
+                    notificarErroPadrao(resultado);
+                }
+            } finally {
+                finalizarLoading();
             }
         }
         // Salvar usuário
@@ -2924,7 +3003,7 @@
                 await carregarUsuarios();
                 carregarDadosTabelas();
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         // Liberar armário
@@ -2937,7 +3016,7 @@
                 carregarDadosTabelas();
                 mostrarSucesso('Armário liberado com sucesso');
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         function formatarStatusArmario(status) {
@@ -3085,6 +3164,7 @@
             inputDesc.type = 'text';
             inputDesc.placeholder = 'Ex.: mochila azul';
             inputDesc.className = 'wizard-input termo-volume-desc';
+            inputDesc.setAttribute('list', 'termo-itens-sugestoes');
             if (dados.descricao) {
                 inputDesc.value = dados.descricao;
             }
@@ -3214,7 +3294,7 @@
                 carregarDadosTabelas();
                 mostrarSucesso('Termo aplicado com sucesso e PDF gerado');
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         function fecharTermoModal() {
@@ -3299,7 +3379,7 @@
                 elementos.movData.value = iso.slice(0, 10);
                 elementos.movHora.value = iso.slice(11, 16);
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         function tratarAcaoTermo(evento) {
@@ -3474,7 +3554,7 @@
                 carregarDadosTabelas();
                 mostrarSucesso('Armário liberado com sucesso');
             } else {
-                mostrarErro(resultado.error);
+                notificarErroPadrao(resultado);
             }
         }
         // Atualizar painel de notificações
