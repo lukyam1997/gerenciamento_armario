@@ -267,8 +267,8 @@
             margin-bottom: 30px;
         }
         .card {
-            background: color-mix(in srgb, var(--dark-color) 92%, black 8%);
-            color: var(--light-color);
+            background: var(--surface-color);
+            color: var(--dark-color);
             border-radius: 14px;
             box-shadow: 0 12px 28px var(--shadow-color);
             padding: 20px;
@@ -283,6 +283,8 @@
         }
         .card.em-uso {
             border-top: 4px solid var(--primary-color);
+            background: color-mix(in srgb, var(--primary-color) 78%, black 22%);
+            color: var(--light-color);
         }
         .card.proximo {
             border-top: 4px solid var(--warning-color);
@@ -299,24 +301,31 @@
         .card-title {
             font-size: 1rem;
             font-weight: 600;
-            color: var(--light-color);
+            color: var(--dark-color);
         }
         .card-icon {
             font-size: 1.6rem;
             color: var(--primary-color);
         }
         .card.livre .card-icon   { color: var(--success-color); }
-        .card.em-uso .card-icon  { color: var(--primary-color); }
+        .card.em-uso .card-icon  { color: var(--light-color); }
         .card.proximo .card-icon { color: var(--warning-color); }
         .card.vencido .card-icon { color: var(--danger-color); }
         .card-value {
             font-size: 2rem;
             font-weight: bold;
             margin-bottom: 5px;
-            color: var(--light-color);
+            color: var(--dark-color);
         }
         .card-description {
             font-size: 0.9rem;
+            color: var(--muted-color);
+        }
+        .card.em-uso .card-title,
+        .card.em-uso .card-value {
+            color: var(--light-color);
+        }
+        .card.em-uso .card-description {
             color: color-mix(in srgb, white 65%, transparent);
         }
         /* Filtros */
