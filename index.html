@@ -724,6 +724,32 @@
             flex-direction: column;
             gap: 12px;
         }
+        .wizard-signature-area {
+            border: 1px dashed color-mix(in srgb, var(--primary-color) 35%, transparent);
+            padding: 14px;
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+        }
+        .wizard-signature-canvas {
+            width: 100%;
+            height: 160px;
+            background: #fff;
+            border: 1px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
+            border-radius: 10px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .wizard-signature-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+            gap: 8px;
+        }
+        .wizard-signature-hint {
+            font-size: 0.75rem;
+            color: #5b6b86;
+            margin-top: 6px;
+        }
         .wizard-volume-item {
             border: 1px dashed color-mix(in srgb, var(--primary-color) 35%, transparent);
             border-radius: 12px;
@@ -985,6 +1011,10 @@
         .status-label.pendente {
             background-color: rgba(245, 158, 11, 0.14);
             color: var(--warning-color);
+        }
+        .status-label.andamento {
+            background-color: rgba(59, 130, 246, 0.14);
+            color: var(--primary-color);
         }
         .text-muted {
             color: var(--muted-color);
@@ -1748,6 +1778,19 @@
                                         <div class="wizard-error">Informe ao menos um volume com quantidade e descrição.</div>
                                     </div>
                                 </div>
+                                <div class="wizard-col-12">
+                                    <div class="wizard-field">
+                                        <label class="wizard-required">Assinatura do responsável (etapa inicial)</label>
+                                        <div class="wizard-signature-area">
+                                            <canvas id="termo-signature-canvas" class="wizard-signature-canvas"></canvas>
+                                            <div class="wizard-signature-actions">
+                                                <button type="button" class="btn btn-secondary" id="termo-signature-clear">Limpar assinatura</button>
+                                            </div>
+                                            <div class="wizard-signature-hint">Solicite que o responsável assine dentro da área indicada.</div>
+                                        </div>
+                                        <div class="wizard-error">A assinatura é obrigatória.</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -1950,6 +1993,8 @@
             termoVolumesList: document.getElementById('termo-volumes-list'),
             termoAddVolume: document.getElementById('termo-add-volume'),
             termoVolumesField: document.getElementById('termo-volumes-field'),
+            termoAssinaturaCanvas: document.getElementById('termo-signature-canvas'),
+            termoAssinaturaClear: document.getElementById('termo-signature-clear'),
             tabelaTermos: document.getElementById('tabela-termos'),
             tabelaTermosBody: document.querySelector('#tabela-termos tbody'),
             movimentacaoModal: document.getElementById('movimentacao-modal'),
@@ -1988,6 +2033,8 @@
         let liberacaoArmarioAtual = null;
         let assinaturaDesenhada = false;
         let desenhandoAssinatura = false;
+        let termoAssinaturaDesenhada = false;
+        let termoDesenhandoAssinatura = false;
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             inicializarCanvasAssinatura();
@@ -2110,17 +2157,64 @@
                 atualizarPainelNotificacoes();
             }
         }
-        function inicializarCanvasAssinatura() {
-            const canvas = elementos.assinaturaCanvas;
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
-           
+        function aguardarProximoFrame() {
+            return new Promise(resolve => {
+                if (typeof requestAnimationFrame === 'function') {
+                    requestAnimationFrame(() => resolve());
+                } else {
+                    setTimeout(resolve, 16);
+                }
+            });
+        }
+        function restaurarDesenhoCanvas(canvas, dataUrl) {
+            if (!canvas || !dataUrl) return;
             const ctx = canvas.getContext('2d');
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#0b1324';
+            const imagem = new Image();
+            imagem.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
+            };
+            imagem.src = dataUrl.startsWith('data:') ? dataUrl : `data:image/png;base64,${dataUrl}`;
+        }
+        function inicializarCanvasAssinatura() {
+            if (elementos.assinaturaCanvas) {
+                const assinaturaExistente = assinaturaDesenhada ? elementos.assinaturaCanvas.toDataURL('image/png') : null;
+                const rect = elementos.assinaturaCanvas.getBoundingClientRect();
+                elementos.assinaturaCanvas.width = rect.width;
+                elementos.assinaturaCanvas.height = rect.height;
+                const ctx = elementos.assinaturaCanvas.getContext('2d');
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#0b1324';
+                if (assinaturaExistente) {
+                    restaurarDesenhoCanvas(elementos.assinaturaCanvas, assinaturaExistente);
+                }
+            }
+            if (elementos.termoAssinaturaCanvas) {
+                const assinaturaTermoExistente = termoAssinaturaDesenhada
+                    ? elementos.termoAssinaturaCanvas.toDataURL('image/png')
+                    : null;
+                const rectTermo = elementos.termoAssinaturaCanvas.getBoundingClientRect();
+                elementos.termoAssinaturaCanvas.width = rectTermo.width;
+                elementos.termoAssinaturaCanvas.height = rectTermo.height;
+                const ctxTermo = elementos.termoAssinaturaCanvas.getContext('2d');
+                ctxTermo.lineWidth = 2;
+                ctxTermo.lineCap = 'round';
+                ctxTermo.lineJoin = 'round';
+                ctxTermo.strokeStyle = '#0b1324';
+                if (assinaturaTermoExistente) {
+                    restaurarDesenhoCanvas(elementos.termoAssinaturaCanvas, assinaturaTermoExistente);
+                }
+            }
+        }
+        function debounce(fn, delay = 200) {
+            let timeoutId;
+            return function(...args) {
+                const contexto = this;
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => fn.apply(contexto, args), delay);
+            };
         }
         function iniciarLoadingBotao(botao) {
             if (!botao) return () => {};
@@ -2265,6 +2359,21 @@
                     elementos.termoVolumesField?.classList.remove('invalid');
                 });
             }
+            if (elementos.termoAssinaturaClear) {
+                elementos.termoAssinaturaClear.addEventListener('click', () => {
+                    limparAssinaturaTermo();
+                });
+            }
+            if (elementos.termoAssinaturaCanvas) {
+                elementos.termoAssinaturaCanvas.addEventListener('pointerdown', iniciarAssinaturaTermo);
+                elementos.termoAssinaturaCanvas.addEventListener('pointermove', desenharAssinaturaTermo);
+                elementos.termoAssinaturaCanvas.addEventListener('pointerup', finalizarAssinaturaTermo);
+                elementos.termoAssinaturaCanvas.addEventListener('pointerleave', finalizarAssinaturaTermo);
+                elementos.termoAssinaturaCanvas.addEventListener('pointercancel', finalizarAssinaturaTermo);
+            }
+            window.addEventListener('resize', debounce(() => {
+                inicializarCanvasAssinatura();
+            }, 150));
             // Movimentações
             elementos.movimentacaoModalClose.addEventListener('click', fecharMovimentacaoModal);
             elementos.movimentacaoForm.addEventListener('submit', function(e) {
@@ -2275,6 +2384,40 @@
             elementos.tabelaTermos.addEventListener('click', tratarAcaoTermo);
             if (elementos.tabelaUnidadesBody) {
                 elementos.tabelaUnidadesBody.addEventListener('click', tratarAcaoUnidade);
+            }
+            const tabelaAcompanhantes = document.querySelector('#tabela-acompanhantes');
+            if (tabelaAcompanhantes) {
+                tabelaAcompanhantes.addEventListener('click', async (evento) => {
+                    const alvo = evento.target.closest('[data-action]');
+                    if (!alvo) return;
+                    const id = parseInt(alvo.dataset.id, 10);
+                    if (Number.isNaN(id)) return;
+                    const acao = alvo.dataset.action;
+                    let finalizarLoading = () => {};
+                    if (alvo.tagName === 'BUTTON') {
+                        finalizarLoading = iniciarLoadingBotao(alvo);
+                    }
+                    try {
+                        switch (acao) {
+                            case 'usar':
+                                usarArmario(id);
+                                break;
+                            case 'liberar':
+                                await abrirModalLiberacao(id, alvo.dataset.tipo || 'acompanhante');
+                                break;
+                            case 'mov':
+                                await abrirMovimentacoes(id);
+                                break;
+                            case 'termo':
+                                await abrirTermoWizard(id);
+                                break;
+                            default:
+                                break;
+                        }
+                    } finally {
+                        finalizarLoading();
+                    }
+                });
             }
             // Liberação de armário
             elementos.liberacaoModalClose.addEventListener('click', fecharModalLiberacao);
@@ -2363,7 +2506,7 @@
                         ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão:</strong> ${armario.horaPrevista}</p>` : ''}
-                        ${armario.tipo === 'acompanhante' ? `<p><strong>Termo:</strong> ${armario.termoAplicado ? 'Aplicado' : 'Pendente'}</p>` : ''}
+                        ${armario.tipo === 'acompanhante' ? `<p><strong>Termo:</strong> ${armario.termoInfo ? (armario.termoFinalizado ? 'Finalizado' : 'Em andamento') : 'Pendente'}</p>` : ''}
                     `;
                 }
                 card.innerHTML = `
@@ -2477,7 +2620,7 @@
                             ${armario.status !== 'livre'
                                 ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="acompanhante">Liberar</button>
                                    <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
-                                   ${armario.termoAplicado ? '' : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`}`
+                                   ${armario.termoInfo ? (armario.termoFinalizado ? '' : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`) : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`}`
                                 : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
                             }
                         </td>
@@ -2549,10 +2692,16 @@
             const armariosComTermo = resultado.data
                 .filter(a => a.status !== 'livre')
                 .sort((a, b) => {
-                    if (a.termoAplicado === b.termoAplicado) {
+                    const peso = (valor) => {
+                        if (!valor.termoInfo) return 0;
+                        return valor.termoFinalizado ? 2 : 1;
+                    };
+                    const pesoA = peso(a);
+                    const pesoB = peso(b);
+                    if (pesoA === pesoB) {
                         return new Date(b.dataRegistro || 0) - new Date(a.dataRegistro || 0);
                     }
-                    return a.termoAplicado ? 1 : -1;
+                    return pesoA - pesoB;
                 });
 
             if (!armariosComTermo.length) {
@@ -2563,23 +2712,34 @@
             const linhas = [];
 
             for (const armario of armariosComTermo) {
-                const pendente = !armario.termoAplicado;
+                const termoInfo = armario.termoInfo || null;
+                const possuiTermo = Boolean(termoInfo);
+                const finalizado = Boolean(armario.termoFinalizado);
                 const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
                 if (estado.carregamentoTermosId !== carregamentoId) return;
 
                 const numMovimentacoes = movResultado.success ? movResultado.data.length : 0;
-                const aplicadoEm = !pendente && armario.dataRegistro ? formatarData(armario.dataRegistro) : '-';
-                const pdfColuna = pendente
-                    ? '<span class="text-muted">Indisponível</span>'
-                    : `<a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a>`;
-                const botoesAcao = pendente
+                const aplicadoEm = finalizado
+                    ? formatarData(termoInfo?.finalizadoEm || termoInfo?.aplicadoEm)
+                    : termoInfo?.aplicadoEm ? formatarData(termoInfo.aplicadoEm) : '-';
+                const statusClasse = !possuiTermo ? 'pendente' : finalizado ? 'aplicado' : 'andamento';
+                const statusTexto = !possuiTermo ? 'Pendente' : finalizado ? 'Finalizado' : 'Em andamento';
+                const pdfColuna = finalizado
+                    ? `<a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a>`
+                    : '<span class="text-muted">Indisponível</span>';
+                const botoesAcao = !possuiTermo
                     ? `
                         <button class="btn-small btn-primary" data-action="aplicar" data-id="${armario.id}">Aplicar termo</button>
                         <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
                         <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
                     `
-                    : `
+                    : finalizado
+                        ? `
                         <button class="btn-small btn-primary" data-action="ver" data-id="${armario.id}">Ver termo</button>
+                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                    `
+                        : `
+                        <button class="btn-small btn-primary" data-action="continuar" data-id="${armario.id}">Continuar termo</button>
                         <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
                         <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
                     `;
@@ -2589,7 +2749,7 @@
                         <td>${armario.numero}</td>
                         <td>${armario.nomeVisitante || '-'}</td>
                         <td>${armario.nomePaciente || '-'}</td>
-                        <td><span class="status-label ${pendente ? 'pendente' : 'aplicado'}">${pendente ? 'Pendente' : 'Aplicado'}</span></td>
+                        <td><span class="status-label ${statusClasse}">${statusTexto}</span></td>
                         <td>${aplicadoEm}</td>
                         <td>${numMovimentacoes} registro(s)</td>
                         <td>${pdfColuna}</td>
@@ -2824,8 +2984,14 @@
                 elementos.armarioForm.dataset.numero = armario.numero;
                 elementos.armarioModal.style.display = 'flex';
             } else {
+                const termoStatusTexto = armario.termoInfo
+                    ? (armario.termoFinalizado ? 'Finalizado' : 'Em andamento')
+                    : 'Pendente';
+                const termoAviso = armario.termoInfo && !armario.termoFinalizado
+                    ? '<br><small>Finalize o termo antes da liberação do armário.</small>'
+                    : (!armario.termoInfo ? '<br><small>Finalize o termo antes da primeira movimentação.</small>' : '');
                 const termoHtml = armario.tipo === 'acompanhante'
-                    ? `<div class="info-box" style="margin-top:12px;">Termo de responsabilidade: <strong>${armario.termoAplicado ? 'Aplicado' : 'Pendente'}</strong>${armario.termoAplicado ? '' : '<br><small>Finalize o termo antes da primeira movimentação.</small>'}</div>`
+                    ? `<div class="info-box" style="margin-top:12px;">Termo de responsabilidade: <strong>${termoStatusTexto}</strong>${termoAviso}</div>`
                     : '';
                 Swal.fire({
                     title: `Armário ${armario.numero}`,
@@ -2843,7 +3009,7 @@
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão de saída:</strong> ${armario.horaPrevista}</p>` : ''}
                         ${termoHtml}
-                        ${armario.tipo === 'acompanhante' && !armario.termoAplicado ? '<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">Aplicar termo agora</button></div>' : ''}
+                        ${armario.tipo === 'acompanhante' && (!armario.termoInfo || !armario.termoFinalizado) ? `<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">${armario.termoInfo ? 'Continuar termo' : 'Aplicar termo agora'}</button></div>` : ''}
                     `,
                     icon: 'info',
                     showCancelButton: true,
@@ -2854,12 +3020,17 @@
                     confirmButtonColor: '#28a745',
                     reverseButtons: true,
                     didOpen: () => {
-                        if (armario.tipo === 'acompanhante' && !armario.termoAplicado) {
+                        if (armario.tipo === 'acompanhante' && (!armario.termoInfo || !armario.termoFinalizado)) {
                             const btn = Swal.getHtmlContainer().querySelector('#btn-aplicar-termo');
                             if (btn) {
-                                btn.addEventListener('click', () => {
-                                    Swal.close();
-                                    abrirTermoWizard(armario.id);
+                                btn.addEventListener('click', async () => {
+                                    const finalizar = iniciarLoadingBotao(btn);
+                                    try {
+                                        Swal.close();
+                                        await abrirTermoWizard(armario.id);
+                                    } finally {
+                                        finalizar();
+                                    }
                                 });
                             }
                         }
@@ -3061,7 +3232,7 @@
                     atualizarInterface();
                     carregarDadosTabelas();
                     if (tipo === 'acompanhante') {
-                        abrirTermoWizard(resultado.id);
+                        await abrirTermoWizard(resultado.id);
                     } else {
                         mostrarSucesso('Armário cadastrado com sucesso');
                     }
@@ -3154,26 +3325,67 @@
         function abrirTermoDireto(id) {
             abrirTermoWizard(id);
         }
-        function abrirTermoWizard(id) {
+        async function abrirTermoWizard(id) {
             const armario = obterArmarioPorId(id);
             if (!armario) return;
             termoArmarioAtual = id;
             elementos.termoArmario.textContent = armario.numero;
             elementos.termoForm.reset();
             elementos.termoForm.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
-            document.getElementById('termo-paciente').value = armario.nomePaciente || '';
-            document.getElementById('termo-leito').value = armario.leito || '';
-            document.getElementById('termo-resp-nome').value = armario.nomeVisitante || '';
-            prepararVolumesTermo();
+            limparAssinaturaTermo(true);
+
+            let termoDados = null;
+            try {
+                const resposta = await callGoogleScript('getTermo', { armarioId: id });
+                if (resposta.success) {
+                    termoDados = resposta.data;
+                } else if (resposta.error && resposta.error !== 'Termo não encontrado') {
+                    notificarErroPadrao(resposta);
+                }
+            } catch (erro) {
+                console.warn('Falha ao carregar termo existente:', erro);
+            }
+
+            document.getElementById('termo-paciente').value = termoDados?.paciente || armario.nomePaciente || '';
+            document.getElementById('termo-prontuario').value = termoDados?.prontuario || '';
+            document.getElementById('termo-nascimento').value = termoDados?.nascimento ? termoDados.nascimento.slice(0, 10) : '';
+            document.getElementById('termo-setor').value = termoDados?.setor || '';
+            document.getElementById('termo-leito').value = termoDados?.leito || armario.leito || '';
+            document.getElementById('termo-resp-nome').value = termoDados?.acompanhante || armario.nomeVisitante || '';
+            document.getElementById('termo-resp-telefone').value = termoDados?.telefone || '';
+            document.getElementById('termo-resp-doc').value = termoDados?.documento || '';
+            document.getElementById('termo-resp-parentesco').value = termoDados?.parentesco || '';
+
+            if (termoDados?.consciente) {
+                const radio = document.querySelector(`input[name="termo-consciente"][value="${termoDados.consciente}"]`);
+                if (radio) radio.checked = true;
+            } else {
+                document.querySelectorAll('input[name="termo-consciente"]').forEach(r => (r.checked = false));
+            }
+
+            ['ori1', 'ori2', 'ori3'].forEach(chave => {
+                const checkbox = document.getElementById(`termo-${chave}`);
+                if (checkbox) {
+                    checkbox.checked = termoDados?.orientacoes?.includes(chave) || false;
+                }
+            });
+
+            prepararVolumesTermo(Array.isArray(termoDados?.volumes) && termoDados.volumes.length ? termoDados.volumes : []);
             mostrarPassoTermo(0);
             elementos.termoModal.style.display = 'flex';
+            await aguardarProximoFrame();
+            inicializarCanvasAssinatura();
+            const assinaturaInicial = termoDados?.assinaturas?.inicial || termoDados?.assinaturaBase64 || '';
+            if (assinaturaInicial) {
+                restaurarAssinaturaTermo(assinaturaInicial);
+            }
         }
         function mostrarPassoTermo(indice) {
             termoSteps.forEach((step, idx) => step.classList.toggle('active', idx === indice));
             termoPassoAtual = indice;
             const total = termoSteps.length;
             elementos.termoBtnVoltar.disabled = indice === 0;
-            elementos.termoBtnAvancar.textContent = indice === total - 1 ? 'Aplicar termo' : 'Avançar';
+            elementos.termoBtnAvancar.textContent = indice === total - 1 ? 'Concluir etapa inicial' : 'Avançar';
             const progresso = ((indice + 1) / total) * 100;
             elementos.termoProgress.style.width = `${progresso}%`;
             elementos.termoProgressLabel.textContent = `Passo ${indice + 1} de ${total}`;
@@ -3211,6 +3423,10 @@
                 }
             });
             if (step.contains(elementos.termoVolumesField) && !validarVolumesTermo()) {
+                valido = false;
+            }
+            if (step.contains(elementos.termoAssinaturaCanvas) && !termoAssinaturaDesenhada) {
+                elementos.termoAssinaturaCanvas.closest('.wizard-field')?.classList.add('invalid');
                 valido = false;
             }
             return valido;
@@ -3329,6 +3545,66 @@
             elementos.termoVolumesField.classList.remove('invalid');
             return true;
         }
+        function limparAssinaturaTermo(silencioso = false) {
+            const canvas = elementos.termoAssinaturaCanvas;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            termoAssinaturaDesenhada = false;
+            termoDesenhandoAssinatura = false;
+            const campo = canvas.closest('.wizard-field');
+            if (!campo) return;
+            if (silencioso) {
+                campo.classList.remove('invalid');
+            } else {
+                campo.classList.add('invalid');
+            }
+        }
+        function restaurarAssinaturaTermo(base64) {
+            if (!base64) return;
+            const canvas = elementos.termoAssinaturaCanvas;
+            if (!canvas) return;
+            const dataUrl = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+            restaurarDesenhoCanvas(canvas, dataUrl);
+            termoAssinaturaDesenhada = true;
+            termoDesenhandoAssinatura = false;
+            canvas.closest('.wizard-field')?.classList.remove('invalid');
+        }
+        function obterPosicaoAssinaturaTermo(evento) {
+            const canvas = elementos.termoAssinaturaCanvas;
+            if (!canvas) return { x: 0, y: 0 };
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: evento.clientX - rect.left,
+                y: evento.clientY - rect.top
+            };
+        }
+        function iniciarAssinaturaTermo(evento) {
+            if (!elementos.termoAssinaturaCanvas) return;
+            evento.preventDefault();
+            termoDesenhandoAssinatura = true;
+            const ctx = elementos.termoAssinaturaCanvas.getContext('2d');
+            const pos = obterPosicaoAssinaturaTermo(evento);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+        }
+        function desenharAssinaturaTermo(evento) {
+            if (!termoDesenhandoAssinatura || !elementos.termoAssinaturaCanvas) return;
+            evento.preventDefault();
+            const ctx = elementos.termoAssinaturaCanvas.getContext('2d');
+            const pos = obterPosicaoAssinaturaTermo(evento);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            termoAssinaturaDesenhada = true;
+            elementos.termoAssinaturaCanvas.closest('.wizard-field')?.classList.remove('invalid');
+        }
+        function finalizarAssinaturaTermo(evento) {
+            if (!termoDesenhandoAssinatura) return;
+            evento.preventDefault();
+            termoDesenhandoAssinatura = false;
+            termoAssinaturaDesenhada = true;
+            elementos.termoAssinaturaCanvas?.closest('.wizard-field')?.classList.remove('invalid');
+        }
         function navegarPassoTermo(delta) {
             const novoIndice = termoPassoAtual + delta;
             if (novoIndice >= 0 && novoIndice < termoSteps.length) {
@@ -3355,8 +3631,8 @@
         async function aplicarTermo() {
             if (termoArmarioAtual === null) return;
             // Capturar a assinatura do canvas
-            const canvas = document.getElementById('signature-canvas');
-            const assinaturaBase64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+            const canvas = elementos.termoAssinaturaCanvas;
+            const assinaturaBase64 = canvas ? canvas.toDataURL('image/png').replace('data:image/png;base64,', '') : '';
             const volumes = obterVolumesTermo();
             const descricaoVolumes = volumes.map(v => `${v.quantidade}x ${v.descricao}`).join('; ');
             const dadosTermo = {
@@ -3380,13 +3656,13 @@
             const resultado = await callGoogleScript('salvarTermoCompleto', dadosTermo);
             if (resultado.success) {
                 fecharTermoModal();
-               
+
                 // Recarregar dados
                 await carregarArmarios();
                 await carregarEstatisticas();
                 atualizarInterface();
                 carregarDadosTabelas();
-                mostrarSucesso('Termo aplicado com sucesso e PDF gerado');
+                mostrarSucesso('Etapa inicial do termo registrada. Finalize o termo ao encerrar o armário.');
             } else {
                 notificarErroPadrao(resultado);
             }
@@ -3398,6 +3674,7 @@
             elementos.termoForm.reset();
             elementos.termoForm.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
             prepararVolumesTermo();
+            limparAssinaturaTermo(true);
         }
         async function abrirMovimentacoes(id) {
             const armario = obterArmarioPorId(id);
@@ -3525,7 +3802,10 @@
                         await verPDFTermo(id);
                         break;
                     case 'aplicar':
-                        abrirTermoWizard(id);
+                        await abrirTermoWizard(id);
+                        break;
+                    case 'continuar':
+                        await abrirTermoWizard(id);
                         break;
                     default:
                         break;
@@ -3559,6 +3839,8 @@
                 ${termo.parentesco ? `<p><strong>Parentesco:</strong> ${termo.parentesco}</p>` : ''}
                 <p><strong>Volumes:</strong> ${termo.descricaoVolumes}</p>
                 <p><strong>Aplicado em:</strong> ${formatarDataHora(termo.aplicadoEm)}</p>
+                ${termo.finalizadoEm ? `<p><strong>Finalizado em:</strong> ${formatarDataHora(termo.finalizadoEm)}</p>` : '<p><strong>Status:</strong> Em andamento</p>'}
+                ${termo.metodoFinal ? `<p><strong>Método de encerramento:</strong> ${termo.metodoFinal === 'cpf' ? 'Confirmação por CPF (' + (termo.cpfConfirmacao || '') + ')' : 'Assinatura digital'}</p>` : ''}
             `;
             Swal.fire({
                 title: `Termo - Armário ${armario.numero}`,
@@ -3598,6 +3880,8 @@
                 radio.checked = radio.value === 'assinatura';
             });
             elementos.liberacaoModal.style.display = 'flex';
+            await aguardarProximoFrame();
+            inicializarCanvasAssinatura();
             alternarMetodoLiberacao();
         }
         function fecharModalLiberacao() {
@@ -3670,21 +3954,44 @@
         }
         async function confirmarLiberacao() {
             if (liberacaoArmarioAtual === null) return;
-            const resultado = await callGoogleScript('liberarArmario', {
-                id: liberacaoArmarioAtual,
-                tipo: 'acompanhante' // Ajustar conforme necessário
-            });
-            if (resultado.success) {
-                fecharModalLiberacao();
-               
-                // Recarregar dados
-                await carregarArmarios();
-                await carregarEstatisticas();
-                atualizarInterface();
-                carregarDadosTabelas();
-                mostrarSucesso('Armário liberado com sucesso');
-            } else {
-                notificarErroPadrao(resultado);
+            const finalizarLoading = iniciarLoadingBotao(elementos.liberacaoBtnConfirmar);
+            const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
+            const assinaturaFinal = metodo === 'assinatura'
+                ? elementos.assinaturaCanvas?.toDataURL('image/png').replace('data:image/png;base64,', '') || ''
+                : '';
+            const confirmacao = metodo === 'cpf' ? elementos.cpfConfirmacao.value.trim() : '';
+
+            try {
+                const resultadoFinalizacao = await callGoogleScript('finalizarTermo', {
+                    armarioId: liberacaoArmarioAtual,
+                    metodo,
+                    assinaturaFinal,
+                    confirmacao
+                });
+
+                if (!resultadoFinalizacao.success) {
+                    notificarErroPadrao(resultadoFinalizacao, 'Não foi possível finalizar o termo.');
+                    return;
+                }
+
+                const resultado = await callGoogleScript('liberarArmario', {
+                    id: liberacaoArmarioAtual,
+                    tipo: 'acompanhante'
+                });
+                if (resultado.success) {
+                    fecharModalLiberacao();
+
+                    // Recarregar dados
+                    await carregarArmarios();
+                    await carregarEstatisticas();
+                    atualizarInterface();
+                    carregarDadosTabelas();
+                    mostrarSucesso('Termo finalizado e armário liberado com sucesso');
+                } else {
+                    notificarErroPadrao(resultado);
+                }
+            } finally {
+                finalizarLoading();
             }
         }
         // Atualizar painel de notificações
