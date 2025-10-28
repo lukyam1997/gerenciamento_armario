@@ -33,6 +33,10 @@
             /* Misc */
             --focus-ring: rgba(59, 130, 246, 0.25);
             --sidebar-width: 250px;
+            --em-uso-border-color: color-mix(in srgb, var(--primary-color) 80%, white 20%);
+            --em-uso-card-bg: color-mix(in srgb, var(--primary-color) 88%, black 12%);
+            --em-uso-badge-bg: color-mix(in srgb, var(--primary-color) 18%, white 82%);
+            --em-uso-badge-text: color-mix(in srgb, var(--primary-color) 92%, black 8%);
         }
         * {
             margin: 0;
@@ -282,8 +286,8 @@
             border-top: 4px solid var(--success-color);
         }
         .card.em-uso {
-            border-top: 4px solid var(--primary-color);
-            background: color-mix(in srgb, var(--primary-color) 78%, black 22%);
+            border-top: 4px solid var(--em-uso-border-color);
+            background: var(--em-uso-card-bg);
             color: var(--light-color);
         }
         .card.proximo {
@@ -364,7 +368,7 @@
             border-left: 4px solid var(--success-color);
         }
         .armario-card.em-uso {
-            border-left-color: var(--primary-color);
+            border-left-color: var(--em-uso-border-color);
         }
         .armario-card.proximo {
             border-left-color: var(--warning-color);
@@ -398,8 +402,8 @@
             color: var(--success-color);
         }
         .status-em-uso {
-            background-color: color-mix(in srgb, var(--primary-color) 18%, transparent);
-            color: var(--primary-color);
+            background-color: var(--em-uso-badge-bg);
+            color: var(--em-uso-badge-text);
         }
         .status-proximo {
             background-color: color-mix(in srgb, var(--warning-color) 20%, transparent);
@@ -2026,6 +2030,7 @@
             tabelaUnidades: document.getElementById('tabela-unidades'),
             tabelaUnidadesBody: document.querySelector('#tabela-unidades tbody')
         };
+        const normalizarTexto = (valor) => (valor ?? '').toString().trim().toLowerCase();
         const termoSteps = Array.from(document.querySelectorAll('#termo-form .wizard-step'));
         let termoPassoAtual = 0;
         let termoArmarioAtual = null;
@@ -2118,15 +2123,21 @@
             const resultado = await callGoogleScript('getArmarios', {
                 tipo: estado.perfilAtual
             });
-           
+
             if (resultado.success) {
-                estado.armarios = resultado.data;
+                estado.armarios = resultado.data.map(armario => ({
+                    ...armario,
+                    unidade: armario.unidade ? armario.unidade.trim() : ''
+                }));
             }
         }
         async function carregarUnidades() {
             const resultado = await callGoogleScript('getUnidades');
             if (resultado.success) {
-                estado.unidades = resultado.data;
+                estado.unidades = resultado.data.map(unidade => ({
+                    ...unidade,
+                    nome: unidade.nome ? unidade.nome.trim() : ''
+                }));
                 atualizarSeletoresUnidade();
             }
         }
@@ -2479,11 +2490,13 @@
             elementos.armariosContainer.innerHTML = '';
             const perfil = estado.perfilAtual;
             const unidadeFiltro = estado.unidadeAtual;
+            const unidadeFiltroNormalizado = normalizarTexto(unidadeFiltro);
             let armariosParaExibir = estado.armarios.filter(a => {
                 const correspondePerfil = perfil === 'admin' || perfil === 'ambos' || a.tipo === perfil ||
                     (perfil === 'visitante' && a.tipo === 'visitante') ||
                     (perfil === 'acompanhante' && a.tipo === 'acompanhante');
-                const correspondeUnidade = unidadeFiltro === 'todas' || a.unidade === unidadeFiltro;
+                const correspondeUnidade = unidadeFiltroNormalizado === 'todas' ||
+                    normalizarTexto(a.unidade) === unidadeFiltroNormalizado;
                 return correspondePerfil && correspondeUnidade;
             });
             // Aplicar filtro
@@ -2571,8 +2584,13 @@
             const resultado = await callGoogleScript('getArmarios', { tipo: 'visitante' });
             if (!resultado.success) return;
             tbodyVisitantes.innerHTML = '';
+            const filtroNormalizado = normalizarTexto(unidadeFiltro);
             resultado.data
-                .filter(a => unidadeFiltro === 'todas' || a.unidade === unidadeFiltro)
+                .map(armario => ({
+                    ...armario,
+                    unidade: armario.unidade ? armario.unidade.trim() : ''
+                }))
+                .filter(a => filtroNormalizado === 'todas' || normalizarTexto(a.unidade) === filtroNormalizado)
                 .forEach(armario => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -2602,8 +2620,13 @@
             const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
             if (!resultado.success) return;
             tbodyAcompanhantes.innerHTML = '';
+            const filtroNormalizado = normalizarTexto(unidadeFiltro);
             resultado.data
-                .filter(a => unidadeFiltro === 'todas' || a.unidade === unidadeFiltro)
+                .map(armario => ({
+                    ...armario,
+                    unidade: armario.unidade ? armario.unidade.trim() : ''
+                }))
+                .filter(a => filtroNormalizado === 'todas' || normalizarTexto(a.unidade) === filtroNormalizado)
                 .forEach(armario => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -2768,8 +2791,13 @@
             const resultado = await callGoogleScript('getCadastroArmarios');
             if (!resultado.success) return;
             tbody.innerHTML = '';
-            resultado.data
-                .filter(armario => unidadeFiltro === 'todas' || armario.unidade === unidadeFiltro)
+            const filtroNormalizado = normalizarTexto(unidadeFiltro);
+            estado.cadastroArmarios = resultado.data.map(armario => ({
+                ...armario,
+                unidade: armario.unidade ? armario.unidade.trim() : ''
+            }));
+            estado.cadastroArmarios
+                .filter(armario => filtroNormalizado === 'todas' || normalizarTexto(armario.unidade) === filtroNormalizado)
                 .forEach(armario => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -2827,19 +2855,23 @@
         }
         function atualizarSeletoresUnidade() {
             if (!elementos.unitSelect) return;
-            const valorAtual = estado.unidadeAtual || 'todas';
+            const valorAtual = (estado.unidadeAtual || 'todas').toString().trim();
+            const valorAtualNormalizado = normalizarTexto(valorAtual);
             const opcoes = estado.unidades.map(unidade => {
+                const nomeLimpo = (unidade.nome || '').trim();
                 const desativada = unidade.status !== 'ativa';
-                const label = desativada ? `${unidade.nome} (inativa)` : unidade.nome;
-                return `<option value="${unidade.nome}" ${desativada ? 'disabled' : ''}>${label}</option>`;
+                const label = desativada ? `${nomeLimpo} (inativa)` : nomeLimpo;
+                return `<option value="${nomeLimpo}" ${desativada ? 'disabled' : ''}>${label}</option>`;
             }).join('');
             elementos.unitSelect.innerHTML = `
                 <option value="todas">Todas as unidades</option>
                 ${opcoes}
             `;
-            const valoresDisponiveis = Array.from(elementos.unitSelect.options).map(option => option.value);
-            if (valoresDisponiveis.includes(valorAtual)) {
-                elementos.unitSelect.value = valorAtual;
+            const opcaoCorrespondente = Array.from(elementos.unitSelect.options)
+                .find(option => normalizarTexto(option.value) === valorAtualNormalizado);
+            if (opcaoCorrespondente) {
+                elementos.unitSelect.value = opcaoCorrespondente.value;
+                estado.unidadeAtual = opcaoCorrespondente.value;
             } else {
                 elementos.unitSelect.value = 'todas';
                 estado.unidadeAtual = 'todas';
@@ -2849,17 +2881,19 @@
             if (!elementos.tabelaUnidadesBody) return;
             elementos.tabelaUnidadesBody.innerHTML = '';
             estado.unidades.forEach(unidade => {
-                const totalArmarios = estado.cadastroArmarios.filter(armario => armario.unidade === unidade.nome).length;
+                const nomeLimpo = (unidade.nome || '').trim();
+                const totalArmarios = (estado.cadastroArmarios || [])
+                    .filter(armario => normalizarTexto(armario.unidade) === normalizarTexto(nomeLimpo)).length;
                 const statusClasse = unidade.status === 'ativa' ? 'status-livre' : 'status-vencido';
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${unidade.id}</td>
-                    <td>${unidade.nome}</td>
+                    <td>${nomeLimpo}</td>
                     <td><span class="armario-status ${statusClasse}">${unidade.status === 'ativa' ? 'Ativa' : 'Inativa'}</span></td>
                     <td>${totalArmarios}</td>
                     <td>
-                        <button class="btn-small btn-primary" data-acao-unidade="filtrar" data-unidade="${unidade.nome}">Ver armários</button>
-                        <button class="btn-small ${unidade.status === 'ativa' ? 'btn-edit' : 'btn-secondary'}" data-acao-unidade="alternar" data-unidade="${unidade.nome}">${unidade.status === 'ativa' ? 'Desativar' : 'Ativar'}</button>
+                        <button class="btn-small btn-primary" data-acao-unidade="filtrar" data-unidade="${nomeLimpo}">Ver armários</button>
+                        <button class="btn-small ${unidade.status === 'ativa' ? 'btn-edit' : 'btn-secondary'}" data-acao-unidade="alternar" data-unidade="${nomeLimpo}">${unidade.status === 'ativa' ? 'Desativar' : 'Ativar'}</button>
                     </td>
                 `;
                 elementos.tabelaUnidadesBody.appendChild(tr);
@@ -2878,11 +2912,17 @@
             }
         }
         function selecionarUnidade(unidade) {
-            estado.unidadeAtual = unidade || 'todas';
+            const valorLimpo = (unidade || '').toString().trim();
+            const alvoNormalizado = normalizarTexto(valorLimpo) || 'todas';
+            estado.unidadeAtual = valorLimpo || 'todas';
             if (elementos.unitSelect) {
-                const existe = Array.from(elementos.unitSelect.options).some(option => option.value === estado.unidadeAtual);
-                elementos.unitSelect.value = existe ? estado.unidadeAtual : 'todas';
-                if (!existe) {
+                const opcaoCorrespondente = Array.from(elementos.unitSelect.options)
+                    .find(option => normalizarTexto(option.value) === alvoNormalizado);
+                if (opcaoCorrespondente) {
+                    elementos.unitSelect.value = opcaoCorrespondente.value;
+                    estado.unidadeAtual = opcaoCorrespondente.value;
+                } else {
+                    elementos.unitSelect.value = 'todas';
                     estado.unidadeAtual = 'todas';
                 }
             }
@@ -2890,12 +2930,14 @@
             carregarDadosTabelas();
         }
         async function alternarStatusUnidade(nome) {
-            const unidade = estado.unidades.find(u => u.nome === nome);
+            const alvoNormalizado = normalizarTexto(nome);
+            const unidade = estado.unidades.find(u => normalizarTexto(u.nome) === alvoNormalizado);
             if (!unidade) return;
-            const resultado = await callGoogleScript('alternarStatusUnidade', { nome });
+            const resultado = await callGoogleScript('alternarStatusUnidade', { nome: unidade.nome });
             if (resultado.success) {
                 unidade.status = unidade.status === 'ativa' ? 'inativa' : 'ativa';
-                if (unidade.status === 'inativa' && estado.unidadeAtual === nome) {
+                const nomeExibicao = unidade.nome;
+                if (unidade.status === 'inativa' && normalizarTexto(estado.unidadeAtual) === normalizarTexto(nomeExibicao)) {
                     estado.unidadeAtual = 'todas';
                 }
                 atualizarSeletoresUnidade();
@@ -2904,7 +2946,7 @@
                 atualizarInterface();
                 await Swal.fire({
                     title: 'Unidade atualizada',
-                    text: `A unidade ${nome} agora está ${unidade.status === 'ativa' ? 'ativa' : 'inativa'}.`,
+                    text: `A unidade ${nomeExibicao} agora está ${unidade.status === 'ativa' ? 'ativa' : 'inativa'}.`,
                     icon: 'success',
                     confirmButtonText: 'OK'
                 });
@@ -3076,8 +3118,9 @@
                 return;
             }
             const opcoesUnidades = estado.unidades.map(unidade => {
-                const selecionada = estado.unidadeAtual === unidade.nome ? 'selected' : '';
-                return `<option value="${unidade.nome}" ${selecionada}>${unidade.nome}</option>`;
+                const nomeLimpo = (unidade.nome || '').trim();
+                const selecionada = normalizarTexto(estado.unidadeAtual) === normalizarTexto(nomeLimpo) ? 'selected' : '';
+                return `<option value="${nomeLimpo}" ${selecionada}>${nomeLimpo}</option>`;
             }).join('');
             const resultado = await Swal.fire({
                 title: 'Cadastro de Armários Físicos',
