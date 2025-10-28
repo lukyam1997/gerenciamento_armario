@@ -369,6 +369,9 @@
         }
         .armario-card.em-uso {
             border-left-color: var(--em-uso-border-color);
+            background: var(--em-uso-card-bg);
+            color: var(--light-color);
+            box-shadow: 0 14px 32px color-mix(in srgb, var(--primary-color) 30%, transparent);
         }
         .armario-card.proximo {
             border-left-color: var(--warning-color);
@@ -391,6 +394,9 @@
             font-size: 1.2rem;
             color: var(--dark-color);
         }
+        .armario-card.em-uso .armario-number {
+            color: var(--light-color);
+        }
         .armario-status {
             padding: 4px 8px;
             border-radius: 4px;
@@ -405,6 +411,10 @@
             background-color: var(--em-uso-badge-bg);
             color: var(--em-uso-badge-text);
         }
+        .armario-card.em-uso .status-em-uso {
+            background-color: color-mix(in srgb, var(--surface-color) 18%, transparent);
+            color: var(--light-color);
+        }
         .status-proximo {
             background-color: color-mix(in srgb, var(--warning-color) 20%, transparent);
             color: var(--warning-color);
@@ -416,6 +426,9 @@
         .armario-details {
             font-size: 0.9rem;
             color: var(--muted-color);
+        }
+        .armario-card.em-uso .armario-details {
+            color: color-mix(in srgb, white 88%, transparent);
         }
         .armario-details p {
             margin-bottom: 5px;
@@ -966,6 +979,15 @@
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
+        }
+        .btn.btn-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            pointer-events: auto;
+        }
+        .btn.btn-disabled:hover {
+            transform: none;
+            box-shadow: none;
         }
         .btn-loading {
             opacity: 0.85;
@@ -1898,7 +1920,7 @@
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="liberacao-btn-cancelar">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="liberacao-btn-confirmar" disabled>Confirmar liberação</button>
+                <button type="button" class="btn btn-primary btn-disabled" id="liberacao-btn-confirmar">Confirmar liberação</button>
             </div>
         </div>
     </div>
@@ -2040,6 +2062,7 @@
         let desenhandoAssinatura = false;
         let termoAssinaturaDesenhada = false;
         let termoDesenhandoAssinatura = false;
+        let liberacaoRequisitosOk = false;
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             inicializarCanvasAssinatura();
@@ -2191,8 +2214,10 @@
             if (elementos.assinaturaCanvas) {
                 const assinaturaExistente = assinaturaDesenhada ? elementos.assinaturaCanvas.toDataURL('image/png') : null;
                 const rect = elementos.assinaturaCanvas.getBoundingClientRect();
-                elementos.assinaturaCanvas.width = rect.width;
-                elementos.assinaturaCanvas.height = rect.height;
+                if (rect.width && rect.height) {
+                    elementos.assinaturaCanvas.width = rect.width;
+                    elementos.assinaturaCanvas.height = rect.height;
+                }
                 const ctx = elementos.assinaturaCanvas.getContext('2d');
                 ctx.lineWidth = 2;
                 ctx.lineCap = 'round';
@@ -2207,8 +2232,10 @@
                     ? elementos.termoAssinaturaCanvas.toDataURL('image/png')
                     : null;
                 const rectTermo = elementos.termoAssinaturaCanvas.getBoundingClientRect();
-                elementos.termoAssinaturaCanvas.width = rectTermo.width;
-                elementos.termoAssinaturaCanvas.height = rectTermo.height;
+                if (rectTermo.width && rectTermo.height) {
+                    elementos.termoAssinaturaCanvas.width = rectTermo.width;
+                    elementos.termoAssinaturaCanvas.height = rectTermo.height;
+                }
                 const ctxTermo = elementos.termoAssinaturaCanvas.getContext('2d');
                 ctxTermo.lineWidth = 2;
                 ctxTermo.lineCap = 'round';
@@ -3426,6 +3453,10 @@
         function mostrarPassoTermo(indice) {
             termoSteps.forEach((step, idx) => step.classList.toggle('active', idx === indice));
             termoPassoAtual = indice;
+            const passoAtual = termoSteps[indice];
+            if (passoAtual?.contains(elementos.termoAssinaturaCanvas)) {
+                requestAnimationFrame(() => inicializarCanvasAssinatura());
+            }
             const total = termoSteps.length;
             elementos.termoBtnVoltar.disabled = indice === 0;
             elementos.termoBtnAvancar.textContent = indice === total - 1 ? 'Concluir etapa inicial' : 'Avançar';
@@ -3627,6 +3658,10 @@
             evento.preventDefault();
             termoDesenhandoAssinatura = true;
             const ctx = elementos.termoAssinaturaCanvas.getContext('2d');
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#0b1324';
             const pos = obterPosicaoAssinaturaTermo(evento);
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
@@ -3917,7 +3952,9 @@
             elementos.cpfConfirmacao.value = '';
             assinaturaDesenhada = false;
             desenhandoAssinatura = false;
-            elementos.liberacaoBtnConfirmar.disabled = true;
+            liberacaoRequisitosOk = false;
+            elementos.liberacaoBtnConfirmar.classList.add('btn-disabled');
+            elementos.liberacaoBtnConfirmar.setAttribute('aria-disabled', 'true');
             elementos.liberacaoData.textContent = new Date().toLocaleDateString('pt-BR');
             elementos.liberacaoMetodoRadios.forEach(radio => {
                 radio.checked = radio.value === 'assinatura';
@@ -3965,6 +4002,10 @@
             evento.preventDefault();
             desenhandoAssinatura = true;
             const ctx = elementos.assinaturaCanvas.getContext('2d');
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#0b1324';
             const pos = obterPosicaoAssinatura(evento);
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
@@ -3986,19 +4027,49 @@
             assinaturaDesenhada = true;
             atualizarEstadoLiberacao();
         }
-        function atualizarEstadoLiberacao() {
-            const sliderOk = parseInt(elementos.liberacaoSlider.value, 10) === parseInt(elementos.liberacaoSlider.max, 10);
+        function obterEstadoLiberacao() {
+            const sliderValor = parseInt(elementos.liberacaoSlider.value, 10);
+            const sliderMaximo = parseInt(elementos.liberacaoSlider.max, 10);
+            const sliderOk = sliderValor === sliderMaximo;
             const checkboxOk = elementos.liberacaoCheckbox.checked;
             const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
             const assinaturaOk = metodo === 'assinatura'
                 ? assinaturaDesenhada
                 : elementos.cpfConfirmacao.value.trim().length === 5;
-            elementos.liberacaoBtnConfirmar.disabled = !(sliderOk && checkboxOk && assinaturaOk);
+            return { sliderOk, checkboxOk, assinaturaOk, metodo };
+        }
+        function atualizarEstadoLiberacao() {
+            const estado = obterEstadoLiberacao();
+            liberacaoRequisitosOk = estado.sliderOk && estado.checkboxOk && estado.assinaturaOk;
+            elementos.liberacaoBtnConfirmar.classList.toggle('btn-disabled', !liberacaoRequisitosOk);
+            elementos.liberacaoBtnConfirmar.setAttribute('aria-disabled', String(!liberacaoRequisitosOk));
         }
         async function confirmarLiberacao() {
             if (liberacaoArmarioAtual === null) return;
+            const estado = obterEstadoLiberacao();
+            if (!estado.sliderOk || !estado.checkboxOk || !estado.assinaturaOk) {
+                const mensagens = [];
+                if (!estado.sliderOk) {
+                    mensagens.push('Deslize o controle totalmente para a direita para confirmar a identificação.');
+                }
+                if (!estado.checkboxOk) {
+                    mensagens.push('Marque a declaração de ciência antes de continuar.');
+                }
+                if (!estado.assinaturaOk) {
+                    mensagens.push(estado.metodo === 'assinatura'
+                        ? 'Colete a assinatura digital do responsável para prosseguir.'
+                        : 'Informe os 5 primeiros dígitos do CPF para confirmar a identidade.');
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Atenção',
+                    html: mensagens.map(msg => `<p style="margin:6px 0;">${msg}</p>`).join(''),
+                    confirmButtonText: 'Entendi'
+                });
+                return;
+            }
             const finalizarLoading = iniciarLoadingBotao(elementos.liberacaoBtnConfirmar);
-            const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
+            const metodo = estado.metodo;
             const assinaturaFinal = metodo === 'assinatura'
                 ? elementos.assinaturaCanvas?.toDataURL('image/png').replace('data:image/png;base64,', '') || ''
                 : '';
