@@ -162,77 +162,209 @@
             color: var(--dark-color);
         }
         .selector-control {
+            position: relative;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            border-radius: 10px;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 14px;
             border: 1px solid var(--border-color);
             background: linear-gradient(135deg, var(--surface-color) 0%, color-mix(in srgb, var(--primary-color) 6%, white 94%) 100%);
-            min-width: 190px;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+            min-width: 220px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
             transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            isolation: isolate;
         }
         .selector-control:hover {
             border-color: color-mix(in srgb, var(--primary-color) 60%, white 40%);
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
             transform: translateY(-1px);
         }
+        .selector-control.open,
         .selector-control:focus-within {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 4px var(--focus-ring);
         }
         .selector-icon {
             color: var(--primary-color);
-            font-size: 1rem;
+            font-size: 1.1rem;
+            flex-shrink: 0;
         }
-        .selector-input {
+        .selector-trigger {
             flex: 1;
-            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 0;
             background: transparent;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--dark-color);
-            appearance: none;
-            padding-right: 18px;
+            border: none;
             cursor: pointer;
-        }
-        .selector-input:focus {
-            outline: none;
-        }
-        .selector-control:focus-within .selector-icon,
-        .selector-control:focus-within .selector-arrow {
-            color: var(--primary-dark);
-        }
-        .selector-input option {
-            background: var(--surface-color);
             color: var(--dark-color);
-            font-weight: 500;
-            padding: 10px 12px;
         }
-        .selector-input option:hover,
-        .selector-input option:focus,
-        .selector-input option:checked {
-            background: color-mix(in srgb, var(--primary-color) 18%, white 82%);
-            color: var(--primary-dark);
-        }
-        .selector-input:focus-visible {
+        .selector-trigger:focus {
             outline: none;
         }
-        .selector-input::-webkit-scrollbar {
-            width: 8px;
+        .selector-trigger-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
         }
-        .selector-input::-webkit-scrollbar-track {
-            background: color-mix(in srgb, var(--surface-color) 70%, white 30%);
-            border-radius: 10px;
+        .selector-trigger-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--dark-color);
         }
-        .selector-input::-webkit-scrollbar-thumb {
-            background: color-mix(in srgb, var(--primary-color) 35%, white 65%);
-            border-radius: 10px;
+        .selector-trigger-description {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--muted-color);
         }
         .selector-arrow {
             color: var(--muted-color);
             font-size: 0.9rem;
+            transition: transform 0.2s ease, color 0.2s ease;
+        }
+        .selector-control.open .selector-arrow,
+        .selector-control:focus-within .selector-arrow,
+        .selector-control.open .selector-icon,
+        .selector-control:focus-within .selector-icon {
+            color: var(--primary-dark);
+        }
+        .selector-control.open .selector-arrow {
+            transform: rotate(180deg);
+        }
+        .selector-dropdown {
+            position: absolute;
+            top: calc(100% + 12px);
+            left: 0;
+            width: 100%;
+            background: var(--surface-color);
+            border-radius: 16px;
+            border: 1px solid color-mix(in srgb, var(--primary-color) 12%, var(--border-color) 88%);
+            box-shadow: 0 24px 55px rgba(15, 23, 42, 0.18);
+            padding: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 50;
+        }
+        .selector-control.open .selector-dropdown {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+        .selector-options {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .selector-option {
+            width: 100%;
+        }
+        .selector-option-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            background: transparent;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            color: var(--dark-color);
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .selector-option-button:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px var(--focus-ring);
+        }
+        .selector-option-button:hover:not(.is-disabled) {
+            background: color-mix(in srgb, var(--primary-color) 14%, white 86%);
+            transform: translateX(2px);
+        }
+        .selector-option-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .selector-option-icon,
+        .selector-option-bullet {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: color-mix(in srgb, var(--primary-color) 12%, white 88%);
+            color: var(--primary-dark);
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+        .selector-option-bullet {
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .selector-option-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            align-items: flex-start;
+        }
+        .selector-option-label {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .selector-option-description {
+            font-size: 0.75rem;
+            color: var(--muted-color);
+            max-width: 260px;
+        }
+        .selector-option-check {
+            color: var(--primary-dark);
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        .selector-option-button.is-selected {
+            background: color-mix(in srgb, var(--primary-color) 18%, white 82%);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 30%, white 70%);
+        }
+        .selector-option-button.is-selected .selector-option-check {
+            opacity: 1;
+        }
+        .selector-option-button.is-disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+        .selector-option-button.is-disabled .selector-option-description {
+            color: color-mix(in srgb, var(--muted-color) 64%, white 36%);
+        }
+        .selector-options::-webkit-scrollbar {
+            width: 8px;
+        }
+        .selector-options::-webkit-scrollbar-track {
+            background: color-mix(in srgb, var(--surface-color) 70%, white 30%);
+            border-radius: 10px;
+        }
+        .selector-options::-webkit-scrollbar-thumb {
+            background: color-mix(in srgb, var(--primary-color) 45%, white 55%);
+            border-radius: 10px;
+        }
+        .selector-native-input {
+            position: absolute;
+            inset: 0;
+            width: 0;
+            height: 0;
+            opacity: 0;
             pointer-events: none;
         }
         .notification-bell {
@@ -1287,24 +1419,38 @@
                 <div class="header-selectors">
                     <div class="selector-group">
                         <label for="profile-select">Perfil</label>
-                        <div class="selector-control">
-                            <i class="fas fa-users selector-icon"></i>
-                            <select id="profile-select" class="selector-input">
-                                <option value="geral" selected>Perfil geral</option>
-                                <option value="visitante">Visitantes</option>
-                                <option value="acompanhante">Acompanhantes</option>
+                        <div class="selector-control" data-selector>
+                            <i class="fas fa-users selector-icon" aria-hidden="true"></i>
+                            <button type="button" class="selector-trigger" id="profile-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                <div class="selector-trigger-text">
+                                    <span class="selector-trigger-label">Perfil geral</span>
+                                    <span class="selector-trigger-description">Visão consolidada do atendimento</span>
+                                </div>
+                                <span class="selector-arrow" aria-hidden="true"><i class="fas fa-angle-down"></i></span>
+                            </button>
+                            <div class="selector-dropdown" role="listbox" aria-labelledby="profile-select-trigger"></div>
+                            <select id="profile-select" class="selector-input" aria-hidden="true" tabindex="-1">
+                                <option value="geral" selected data-icon="fas fa-chart-line" data-description="Visão consolidada do atendimento">Perfil geral</option>
+                                <option value="visitante" data-icon="fas fa-id-badge" data-description="Gestão completa dos visitantes">Visitantes</option>
+                                <option value="acompanhante" data-icon="fas fa-people-roof" data-description="Acompanhamento dedicado aos pacientes">Acompanhantes</option>
                             </select>
-                            <span class="selector-arrow"><i class="fas fa-angle-down"></i></span>
                         </div>
                     </div>
                     <div class="selector-group">
                         <label for="unit-select">Unidade</label>
-                        <div class="selector-control">
-                            <i class="fas fa-building selector-icon"></i>
-                            <select id="unit-select" class="selector-input">
-                                <option value="todas">Todas as unidades</option>
+                        <div class="selector-control" data-selector>
+                            <i class="fas fa-building selector-icon" aria-hidden="true"></i>
+                            <button type="button" class="selector-trigger" id="unit-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                <div class="selector-trigger-text">
+                                    <span class="selector-trigger-label">Todas as unidades</span>
+                                    <span class="selector-trigger-description">Visualização geral por setor</span>
+                                </div>
+                                <span class="selector-arrow" aria-hidden="true"><i class="fas fa-angle-down"></i></span>
+                            </button>
+                            <div class="selector-dropdown" role="listbox" aria-labelledby="unit-select-trigger"></div>
+                            <select id="unit-select" class="selector-input" aria-hidden="true" tabindex="-1">
+                                <option value="todas" data-icon="fas fa-layer-group" data-description="Visualização geral por setor">Todas as unidades</option>
                             </select>
-                            <span class="selector-arrow"><i class="fas fa-angle-down"></i></span>
                         </div>
                     </div>
                 </div>
@@ -2121,6 +2267,270 @@
             tabelaUnidades: document.getElementById('tabela-unidades'),
             tabelaUnidadesBody: document.querySelector('#tabela-unidades tbody')
         };
+        const customSelectorInstances = new WeakMap();
+        const customSelectorStore = new Set();
+        function aprimorarSeletoresCabecalho() {
+            document.querySelectorAll('.selector-control .selector-input').forEach(select => criarSelectorPersonalizado(select));
+        }
+        function criarSelectorPersonalizado(select) {
+            if (!select) return;
+            const control = select.closest('.selector-control');
+            if (!control) return;
+            if (customSelectorInstances.has(select)) {
+                atualizarSelectorPersonalizado(select);
+                return;
+            }
+            const trigger = control.querySelector('.selector-trigger');
+            const dropdown = control.querySelector('.selector-dropdown');
+            if (!trigger || !dropdown) return;
+            const labelEl = trigger.querySelector('.selector-trigger-label');
+            const descriptionEl = trigger.querySelector('.selector-trigger-description');
+            dropdown.innerHTML = '';
+            const optionsList = document.createElement('ul');
+            optionsList.className = 'selector-options';
+            optionsList.setAttribute('role', 'presentation');
+            dropdown.appendChild(optionsList);
+            select.classList.add('selector-native-input');
+            select.setAttribute('tabindex', '-1');
+            select.setAttribute('aria-hidden', 'true');
+            const instance = {
+                select,
+                control,
+                trigger,
+                dropdown,
+                optionsList,
+                labelEl,
+                descriptionEl,
+                optionButtons: new Map()
+            };
+            customSelectorInstances.set(select, instance);
+            customSelectorStore.add(instance);
+            control.addEventListener('focusout', event => {
+                if (!control.contains(event.relatedTarget)) {
+                    control.classList.remove('open');
+                    trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+            trigger.addEventListener('click', () => toggleSelectorDropdown(instance));
+            trigger.addEventListener('keydown', event => handleTriggerKeydown(event, instance));
+            optionsList.addEventListener('click', event => handleOptionClick(event, instance));
+            optionsList.addEventListener('keydown', event => handleOptionKeydown(event, instance));
+            select.addEventListener('change', () => sincronizarTriggerComSelect(instance));
+            popularOpcoesPersonalizadas(instance);
+            sincronizarTriggerComSelect(instance);
+        }
+        function atualizarSelectorPersonalizado(select) {
+            const instance = customSelectorInstances.get(select);
+            if (!instance) {
+                criarSelectorPersonalizado(select);
+                return;
+            }
+            popularOpcoesPersonalizadas(instance);
+            sincronizarTriggerComSelect(instance);
+        }
+        function popularOpcoesPersonalizadas(instance) {
+            const { select, optionsList, optionButtons } = instance;
+            optionButtons.clear();
+            optionsList.innerHTML = '';
+            Array.from(select.options).forEach(option => {
+                const item = document.createElement('li');
+                item.className = 'selector-option';
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'selector-option-button';
+                button.dataset.value = option.value;
+                button.setAttribute('role', 'option');
+                button.tabIndex = -1;
+                if (option.disabled) {
+                    button.disabled = true;
+                    button.classList.add('is-disabled');
+                    button.setAttribute('aria-disabled', 'true');
+                }
+                const content = document.createElement('div');
+                content.className = 'selector-option-content';
+                const iconWrapper = document.createElement('span');
+                const iconClass = option.dataset.icon;
+                if (iconClass) {
+                    iconWrapper.className = 'selector-option-icon';
+                    iconWrapper.innerHTML = `<i class="${iconClass}"></i>`;
+                } else {
+                    iconWrapper.className = 'selector-option-bullet';
+                    iconWrapper.textContent = (option.textContent || '').trim().charAt(0) || '?';
+                }
+                const textWrapper = document.createElement('div');
+                textWrapper.className = 'selector-option-text';
+                const label = document.createElement('span');
+                label.className = 'selector-option-label';
+                label.textContent = option.textContent;
+                textWrapper.appendChild(label);
+                if (option.dataset.description) {
+                    const description = document.createElement('span');
+                    description.className = 'selector-option-description';
+                    description.textContent = option.dataset.description;
+                    textWrapper.appendChild(description);
+                }
+                content.appendChild(iconWrapper);
+                content.appendChild(textWrapper);
+                button.appendChild(content);
+                const check = document.createElement('span');
+                check.className = 'selector-option-check';
+                check.innerHTML = '<i class="fas fa-check"></i>';
+                button.appendChild(check);
+                item.appendChild(button);
+                optionsList.appendChild(item);
+                optionButtons.set(option.value, button);
+            });
+            sincronizarTriggerComSelect(instance);
+        }
+        function sincronizarTriggerComSelect(instance) {
+            const { select, labelEl, descriptionEl, optionButtons } = instance;
+            const selectedOption = select.options[select.selectedIndex];
+            const labelTexto = selectedOption ? selectedOption.textContent : 'Selecionar';
+            if (labelEl) labelEl.textContent = labelTexto;
+            if (descriptionEl) {
+                const descricao = selectedOption?.dataset?.description || '';
+                descriptionEl.textContent = descricao;
+                descriptionEl.hidden = !descricao;
+            }
+            optionButtons.forEach((button, value) => {
+                const isSelected = selectedOption && value === selectedOption.value;
+                button.classList.toggle('is-selected', Boolean(isSelected));
+                button.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            });
+        }
+        function toggleSelectorDropdown(instance, forceState) {
+            const { control, trigger } = instance;
+            const isOpen = control.classList.contains('open');
+            const shouldOpen = typeof forceState === 'boolean' ? forceState : !isOpen;
+            if (shouldOpen) {
+                fecharTodosSeletores(instance);
+                control.classList.add('open');
+                trigger.setAttribute('aria-expanded', 'true');
+                focarOpcaoSelecionada(instance);
+            } else {
+                control.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        }
+        function fecharTodosSeletores(exceto) {
+            customSelectorStore.forEach(instance => {
+                if (instance !== exceto) {
+                    instance.control.classList.remove('open');
+                    instance.trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+        function handleOptionClick(event, instance) {
+            const button = event.target.closest('.selector-option-button');
+            if (!button || button.disabled) return;
+            selecionarValorPersonalizado(instance, button.dataset.value);
+        }
+        function selecionarValorPersonalizado(instance, value) {
+            const { select } = instance;
+            const valorAtual = select.value;
+            if (valorAtual !== value) {
+                select.value = value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+                sincronizarTriggerComSelect(instance);
+            }
+            toggleSelectorDropdown(instance, false);
+            instance.trigger.focus();
+        }
+        function handleOptionKeydown(event, instance) {
+            const button = event.target.closest('.selector-option-button');
+            if (!button) return;
+            switch (event.key) {
+                case 'ArrowDown':
+                case 'ArrowRight':
+                    event.preventDefault();
+                    focarProximaOpcao(instance, button, 1);
+                    break;
+                case 'ArrowUp':
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    focarProximaOpcao(instance, button, -1);
+                    break;
+                case 'Home':
+                    event.preventDefault();
+                    focarExtremaOpcao(instance, 'first');
+                    break;
+                case 'End':
+                    event.preventDefault();
+                    focarExtremaOpcao(instance, 'last');
+                    break;
+                case 'Enter':
+                case ' ':
+                    event.preventDefault();
+                    if (!button.disabled) {
+                        selecionarValorPersonalizado(instance, button.dataset.value);
+                    }
+                    break;
+                case 'Escape':
+                    event.preventDefault();
+                    toggleSelectorDropdown(instance, false);
+                    instance.trigger.focus();
+                    break;
+            }
+        }
+        function handleTriggerKeydown(event, instance) {
+            if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+                event.preventDefault();
+                toggleSelectorDropdown(instance, true);
+                focarOpcaoSelecionada(instance, event.key === 'ArrowUp');
+            } else if (event.key === 'Escape') {
+                toggleSelectorDropdown(instance, false);
+            }
+        }
+        function focarProximaOpcao(instance, currentButton, direction) {
+            const buttons = Array.from(instance.optionsList.querySelectorAll('.selector-option-button:not(.is-disabled)'));
+            if (!buttons.length) return;
+            const indexAtual = buttons.indexOf(currentButton);
+            const novoIndice = (indexAtual + direction + buttons.length) % buttons.length;
+            buttons[novoIndice]?.focus();
+        }
+        function focarExtremaOpcao(instance, posicao) {
+            const buttons = Array.from(instance.optionsList.querySelectorAll('.selector-option-button:not(.is-disabled)'));
+            if (!buttons.length) return;
+            const target = posicao === 'last' ? buttons[buttons.length - 1] : buttons[0];
+            target.focus();
+        }
+        function focarOpcaoSelecionada(instance, preferirUltima = false) {
+            requestAnimationFrame(() => {
+                const selectedOption = instance.select.options[instance.select.selectedIndex];
+                const selectedButton = selectedOption ? instance.optionButtons.get(selectedOption.value) : null;
+                const buttons = Array.from(instance.optionsList.querySelectorAll('.selector-option-button:not(.is-disabled)'));
+                if (selectedButton && !selectedButton.disabled) {
+                    selectedButton.focus();
+                } else if (buttons.length) {
+                    const alvo = preferirUltima ? buttons[buttons.length - 1] : buttons[0];
+                    alvo.focus();
+                }
+            });
+        }
+        document.addEventListener('click', event => {
+            const control = event.target.closest('.selector-control');
+            customSelectorStore.forEach(instance => {
+                if (instance.control !== control) {
+                    instance.control.classList.remove('open');
+                    instance.trigger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                customSelectorStore.forEach(instance => {
+                    if (instance.control.classList.contains('open')) {
+                        const shouldReturnFocus = instance.control.contains(document.activeElement);
+                        instance.control.classList.remove('open');
+                        instance.trigger.setAttribute('aria-expanded', 'false');
+                        if (shouldReturnFocus) {
+                            instance.trigger.focus();
+                        }
+                    }
+                });
+            }
+        });
         const normalizarTexto = (valor) => (valor ?? '').toString().trim().toLowerCase();
         const termoSteps = Array.from(document.querySelectorAll('#termo-form .wizard-step'));
         let termoPassoAtual = 0;
@@ -2134,6 +2544,7 @@
         let liberacaoRequisitosOk = false;
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
+            aprimorarSeletoresCabecalho();
             inicializarCanvasAssinatura();
             inicializarEventos();
             carregarDadosIniciais();
@@ -3080,10 +3491,11 @@
                 const nomeLimpo = (unidade.nome || '').trim();
                 const desativada = unidade.status !== 'ativa';
                 const label = desativada ? `${nomeLimpo} (inativa)` : nomeLimpo;
-                return `<option value="${nomeLimpo}" ${desativada ? 'disabled' : ''}>${label}</option>`;
+                const descricao = desativada ? 'Unidade temporariamente indisponível' : 'Filtrar por este setor';
+                return `<option value="${nomeLimpo}" ${desativada ? 'disabled' : ''} data-icon="fas fa-location-dot" data-description="${descricao}">${label}</option>`;
             }).join('');
             elementos.unitSelect.innerHTML = `
-                <option value="todas">Todas as unidades</option>
+                <option value="todas" data-icon="fas fa-layer-group" data-description="Visualização geral por setor">Todas as unidades</option>
                 ${opcoes}
             `;
             const opcaoCorrespondente = Array.from(elementos.unitSelect.options)
@@ -3095,6 +3507,7 @@
                 elementos.unitSelect.value = 'todas';
                 estado.unidadeAtual = 'todas';
             }
+            atualizarSelectorPersonalizado(elementos.unitSelect);
         }
         function renderizarTabelaUnidades() {
             if (!elementos.tabelaUnidadesBody) return;
@@ -3144,6 +3557,7 @@
                     elementos.unitSelect.value = 'todas';
                     estado.unidadeAtual = 'todas';
                 }
+                atualizarSelectorPersonalizado(elementos.unitSelect);
             }
             atualizarInterface();
             carregarDadosTabelas();
