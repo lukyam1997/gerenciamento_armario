@@ -3,7 +3,7 @@ function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setTitle('Sistema de Armários Hospitalares');
+    .setTitle('LockNAC - Gerenciamento de Armários');
 }
 
 function doPost(e) {
@@ -1011,11 +1011,11 @@ function excluirUsuario(dados) {
 
 function autenticarUsuario(dados) {
   try {
-    var login = (dados.matricula || dados.email || dados.login || '').toString().trim();
+    var login = (dados.usuario || dados.matricula || dados.email || dados.login || '').toString().trim();
     var senhaInformada = (dados.senha || '').toString().trim();
 
     if (!login || !senhaInformada) {
-      return { success: false, error: 'Informe matrícula e senha' };
+      return { success: false, error: 'Informe usuário e senha' };
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1028,46 +1028,74 @@ function autenticarUsuario(dados) {
     var totalColunas = estrutura.ultimaColuna || 10;
     var dadosUsuarios = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
     var alvoNormalizado = normalizarTextoBasico(login);
-    var usuarioEncontrado = null;
+    var linhaUsuario = null;
+    var indiceLinhaUsuario = -1;
 
-    dadosUsuarios.some(function(linha) {
-      var email = obterValorLinha(linha, estrutura, 'email', '');
-      var status = obterValorLinha(linha, estrutura, 'status', '');
-      if (normalizarTextoBasico(email) === alvoNormalizado && normalizarTextoBasico(status) === 'ativo') {
-        var senhaArmazenada = obterValorLinha(linha, estrutura, 'senha', '');
-        if (senhaInformada === senhaArmazenada) {
-          var unidadesTexto = obterValorLinha(linha, estrutura, 'unidades', '');
-          var unidadesLista = [];
-          if (typeof unidadesTexto === 'string' && unidadesTexto.trim()) {
-            unidadesLista = unidadesTexto.split(';').map(function(item) {
-              return item.toString().trim();
-            }).filter(function(item) { return item; });
+    for (var i = 0; i < dadosUsuarios.length; i++) {
+      var linha = dadosUsuarios[i];
+      var identificadores = [];
+
+      ['usuario', 'nome', 'matricula', 'email'].forEach(function(chave) {
+        var valor = obterValorLinha(linha, estrutura, chave, '');
+        if (valor !== null && valor !== undefined) {
+          var texto = valor.toString().trim();
+          if (texto) {
+            identificadores.push(texto);
           }
-          usuarioEncontrado = {
-            id: obterValorLinha(linha, estrutura, 'id', ''),
-            nome: obterValorLinha(linha, estrutura, 'nome', ''),
-            email: email,
-            perfil: obterValorLinha(linha, estrutura, 'perfil', ''),
-            acessoVisitantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso visitantes', false)),
-            acessoAcompanhantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso acompanhantes', false)),
-            unidades: unidadesLista,
-            status: status
-          };
         }
-        return true;
-      }
-      return false;
-    });
+      });
 
-    if (!usuarioEncontrado) {
-      return { success: false, error: 'Credenciais inválidas ou usuário inativo' };
+      var encontrou = identificadores.some(function(valor) {
+        return normalizarTextoBasico(valor) === alvoNormalizado;
+      });
+
+      if (encontrou) {
+        linhaUsuario = linha;
+        indiceLinhaUsuario = i;
+        break;
+      }
     }
+
+    if (!linhaUsuario) {
+      return { success: false, error: 'Usuário não encontrado' };
+    }
+
+    var status = obterValorLinha(linhaUsuario, estrutura, 'status', '');
+    if (normalizarTextoBasico(status) !== 'ativo') {
+      return { success: false, error: 'Usuário inativo' };
+    }
+
+    var senhaArmazenada = obterValorLinha(linhaUsuario, estrutura, 'senha', '');
+    if (senhaInformada !== senhaArmazenada) {
+      return { success: false, error: 'Senha incorreta' };
+    }
+
+    var unidadesTexto = obterValorLinha(linhaUsuario, estrutura, 'unidades', '');
+    var unidadesLista = [];
+    if (typeof unidadesTexto === 'string' && unidadesTexto.trim()) {
+      unidadesLista = unidadesTexto.split(';').map(function(item) {
+        return item.toString().trim();
+      }).filter(function(item) { return item; });
+    }
+
+    var usuarioEncontrado = {
+      id: obterValorLinha(linhaUsuario, estrutura, 'id', ''),
+      nome: obterValorLinha(linhaUsuario, estrutura, 'nome', ''),
+      email: obterValorLinha(linhaUsuario, estrutura, 'email', ''),
+      usuario: obterValorLinha(linhaUsuario, estrutura, 'usuario', login) || login,
+      perfil: obterValorLinha(linhaUsuario, estrutura, 'perfil', ''),
+      acessoVisitantes: converterParaBoolean(obterValorLinha(linhaUsuario, estrutura, 'acesso visitantes', false)),
+      acessoAcompanhantes: converterParaBoolean(obterValorLinha(linhaUsuario, estrutura, 'acesso acompanhantes', false)),
+      unidades: unidadesLista,
+      status: status
+    };
 
     registrarLog('LOGIN', 'Usuário ' + usuarioEncontrado.nome + ' autenticado');
 
     return {
       success: true,
-      usuario: usuarioEncontrado
+      usuario: usuarioEncontrado,
+      linha: indiceLinhaUsuario + 2
     };
 
   } catch (error) {

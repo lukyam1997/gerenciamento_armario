@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Armários Hospitalares</title>
+    <title>LockNAC - Gerenciamento de Armários</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
@@ -561,10 +561,67 @@
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
         .login-form button:hover {
             transform: translateY(-1px);
             box-shadow: 0 15px 30px rgba(37, 99, 235, 0.25);
+        }
+        .login-feedback {
+            font-size: 0.85rem;
+            text-align: left;
+            padding: 6px 10px;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.02);
+            color: #0f172a;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .login-feedback::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: currentColor;
+            opacity: 0;
+            transform: scale(0.6);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .login-feedback.is-loading {
+            color: #2563eb;
+        }
+        .login-feedback.is-loading::before {
+            opacity: 1;
+            animation: pulse 0.8s ease-in-out infinite;
+            background: linear-gradient(135deg, #2563eb, #38bdf8);
+        }
+        .login-feedback.is-error {
+            color: #b91c1c;
+            background: rgba(239, 68, 68, 0.08);
+        }
+        .login-feedback.is-error::before {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .login-feedback.is-success {
+            color: #047857;
+            background: rgba(16, 185, 129, 0.12);
+        }
+        .login-feedback.is-success::before {
+            opacity: 1;
+            transform: scale(1);
+            background: linear-gradient(135deg, #10b981, #34d399);
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.45; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.45; }
         }
         .login-help {
             font-size: 0.85rem;
@@ -1525,11 +1582,11 @@
         <div class="login-card">
             <h2>ACESSO RESTRITO</h2>
             <img src="https://i.ibb.co/hxbRMNvV/logo-HUC.jpg" alt="Logo Hospital Universitário do Ceará" loading="lazy">
-            <h3>Portal de Gerenciamento de Salas</h3>
-            <form id="login-form" class="login-form">
+            <h3>LockNAC - Gerenciamento de Armários</h3>
+            <form id="login-form" class="login-form" novalidate>
                 <div>
-                    <label for="login-matricula">Matrícula</label>
-                    <input type="text" id="login-matricula" autocomplete="username" required>
+                    <label for="login-usuario">Usuário</label>
+                    <input type="text" id="login-usuario" autocomplete="username" placeholder="Digite seu usuário" required>
                 </div>
                 <div>
                     <label for="login-senha">Senha</label>
@@ -1537,6 +1594,7 @@
                 </div>
                 <button type="submit" id="login-submit">Entrar</button>
             </form>
+            <div id="login-feedback" class="login-feedback" role="status" aria-live="polite"></div>
             <div class="login-help">Precisa de ajuda com o acesso?</div>
         </div>
     </div>
@@ -1545,7 +1603,7 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <img src="https://i.ibb.co/BVX8Dx9x/controle-armarios.png" alt="Logo do Controle de Armários" class="sidebar-logo" onerror="this.classList.add('hidden');">
-                <div class="sidebar-title">Controle de Armários</div>
+                <div class="sidebar-title">LockNAC</div>
                 <p>Hospital Universitário do Ceará</p>
             </div>
             <nav class="sidebar-menu">
@@ -2374,9 +2432,10 @@
             loginContainer: document.getElementById('login-container'),
             appShell: document.getElementById('app-shell'),
             loginForm: document.getElementById('login-form'),
-            loginMatricula: document.getElementById('login-matricula'),
+            loginUsuario: document.getElementById('login-usuario'),
             loginSenha: document.getElementById('login-senha'),
             loginSubmit: document.getElementById('login-submit'),
+            loginFeedback: document.getElementById('login-feedback'),
             profileSelect: document.getElementById('profile-select'),
             unitSelect: document.getElementById('unit-select'),
             notificationBell: document.getElementById('notification-bell'),
@@ -2938,6 +2997,17 @@
             aplicarPermissoesMenu();
             carregarDadosTabelas();
         }
+        function atualizarFeedbackLogin(tipo, mensagem = '') {
+            if (!elementos.loginFeedback) {
+                return;
+            }
+            const classes = ['is-loading', 'is-error', 'is-success'];
+            elementos.loginFeedback.classList.remove(...classes);
+            elementos.loginFeedback.textContent = mensagem || '';
+            if (tipo && classes.includes(`is-${tipo}`)) {
+                elementos.loginFeedback.classList.add(`is-${tipo}`);
+            }
+        }
         function inicializarLogin() {
             if (typeof loginInicializado !== 'undefined' && loginInicializado) {
                 return;
@@ -2948,25 +3018,28 @@
             }
             elementos.loginForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
-                const matricula = elementos.loginMatricula?.value.trim();
+                const usuarioLogin = elementos.loginUsuario?.value.trim();
                 const senha = elementos.loginSenha?.value.trim();
-                if (!matricula || !senha) {
-                    mostrarErro('Informe matrícula e senha.');
+                atualizarFeedbackLogin();
+                if (!usuarioLogin || !senha) {
+                    atualizarFeedbackLogin('error', 'Informe usuário e senha.');
                     return;
                 }
                 const finalizarLoading = iniciarLoadingBotao(elementos.loginSubmit);
+                atualizarFeedbackLogin('loading', 'Validando credenciais...');
                 try {
-                    const resultado = await callGoogleScript('autenticarUsuario', { matricula, senha });
+                    const resultado = await callGoogleScript('autenticarUsuario', { usuario: usuarioLogin, matricula: usuarioLogin, senha });
                     if (!resultado.success) {
-                        mostrarErro(resultado.error || 'Credenciais inválidas');
+                        atualizarFeedbackLogin('error', resultado.error || 'Credenciais inválidas.');
                         return;
                     }
-                    const usuario = resultado.usuario || {};
-                    usuario.perfil = (usuario.perfil || 'usuario').toString().trim().toLowerCase();
-                    usuario.unidades = normalizarListaDeUnidades(usuario.unidades);
-                    estado.usuarioAutenticado = usuario;
+                    const usuarioAutenticado = resultado.usuario || {};
+                    usuarioAutenticado.perfil = (usuarioAutenticado.perfil || 'usuario').toString().trim().toLowerCase();
+                    usuarioAutenticado.unidades = normalizarListaDeUnidades(usuarioAutenticado.unidades);
+                    estado.usuarioAutenticado = usuarioAutenticado;
                     estado.autenticado = true;
                     elementos.loginSenha.value = '';
+                    atualizarFeedbackLogin('success', 'Login realizado com sucesso!');
                     if (elementos.loginContainer) {
                         elementos.loginContainer.classList.add('hidden');
                     }
@@ -2978,7 +3051,7 @@
                     await inicializarAplicacao();
                 } catch (error) {
                     console.error('Erro ao autenticar usuário:', error);
-                    mostrarErro('Não foi possível realizar o login. Tente novamente.');
+                    atualizarFeedbackLogin('error', 'Não foi possível realizar o login. Tente novamente.');
                 } finally {
                     finalizarLoading();
                 }
