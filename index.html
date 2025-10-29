@@ -80,14 +80,25 @@
             padding: 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
         }
-        .sidebar-header h2 {
-            font-size: 1.5rem;
-            margin-bottom: 5px;
+        .sidebar-logo {
+            max-width: 150px;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
         }
         .sidebar-header p {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             opacity: 0.8;
+            margin: 0;
         }
         .sidebar-menu {
             padding: 15px 0;
@@ -121,6 +132,13 @@
             font-size: 1.05rem;
         }
         /* Main Content */
+        .app-shell {
+            display: flex;
+            width: 100%;
+        }
+        .hidden {
+            display: none !important;
+        }
         .main-content {
             flex: 1;
             margin-left: var(--sidebar-width);
@@ -455,6 +473,122 @@
             justify-content: center;
             color: white;
             font-weight: bold;
+        }
+        .user-details {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
+        .user-details strong {
+            font-size: 0.95rem;
+            color: var(--dark-color);
+        }
+        .user-details span {
+            font-size: 0.8rem;
+            color: var(--muted-color);
+        }
+        .login-wrapper {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at top, rgba(14, 116, 144, 0.12), transparent 60%),
+                linear-gradient(135deg, #eef5fb 0%, #e2f2f7 100%);
+            padding: 20px;
+            z-index: 2000;
+        }
+        .login-card {
+            width: min(420px, 100%);
+            background: #ffffff;
+            border-radius: 22px;
+            padding: 40px 36px;
+            box-shadow: 0 30px 60px rgba(15, 23, 42, 0.15);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .login-card h2 {
+            font-size: 1rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #2563eb;
+        }
+        .login-card h3 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .login-card img {
+            width: 160px;
+            align-self: center;
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            text-align: left;
+        }
+        .login-form label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .login-form input {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid #cbd5f5;
+            padding: 12px 14px;
+            font-size: 0.95rem;
+            background-color: #f8fafc;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .login-form input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            background-color: #ffffff;
+        }
+        .login-form button {
+            margin-top: 8px;
+            width: 100%;
+            border: none;
+            border-radius: 14px;
+            padding: 12px 14px;
+            background: linear-gradient(135deg, #2563eb, #0ea5e9);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .login-form button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 15px 30px rgba(37, 99, 235, 0.25);
+        }
+        .login-help {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        .checkbox-grid {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            margin-top: 4px;
+        }
+        .checkbox-grid label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background-color: color-mix(in srgb, var(--light-color) 90%, white 10%);
+            border: 1px solid color-mix(in srgb, var(--border-color) 80%, white 20%);
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+        .checkbox-grid input {
+            accent-color: var(--primary-color);
         }
         /* Cards Hero */
         .cards-hero {
@@ -1387,29 +1521,50 @@
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h2>Controle de Armários</h2>
-            <p>Hospital Universitário do Ceará</p>
+    <div id="login-container" class="login-wrapper">
+        <div class="login-card">
+            <h2>ACESSO RESTRITO</h2>
+            <img src="https://i.ibb.co/hxbRMNvV/logo-HUC.jpg" alt="Logo Hospital Universitário do Ceará" loading="lazy">
+            <h3>Portal de Gerenciamento de Salas</h3>
+            <form id="login-form" class="login-form">
+                <div>
+                    <label for="login-matricula">Matrícula</label>
+                    <input type="text" id="login-matricula" autocomplete="username" required>
+                </div>
+                <div>
+                    <label for="login-senha">Senha</label>
+                    <input type="password" id="login-senha" autocomplete="current-password" required>
+                </div>
+                <button type="submit" id="login-submit">Entrar</button>
+            </form>
+            <div class="login-help">Precisa de ajuda com o acesso?</div>
         </div>
-        <nav class="sidebar-menu">
-            <ul>
-                <li><a href="#" class="active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
-                <li><a href="#" data-page="visitantes"><i class="fas fa-user-clock"></i> <span>Visitantes</span></a></li>
-                <li><a href="#" data-page="acompanhantes"><i class="fas fa-user-friends"></i> <span>Acompanhantes</span></a></li>
-                <li><a href="#" data-page="historico-visitantes"><i class="fas fa-history"></i> <span>Histórico Visitantes</span></a></li>
-                <li><a href="#" data-page="historico-acompanhantes"><i class="fas fa-history"></i> <span>Histórico Acompanhantes</span></a></li>
-                <li><a href="#" data-page="termo-responsabilidade"><i class="fas fa-file-signature"></i> <span>Termo de Responsabilidade</span></a></li>
-                <li><a href="#" data-page="cadastro-armarios"><i class="fas fa-archive"></i> <span>Cadastro de Armários</span></a></li>
-                <li><a href="#" data-page="cadastro-unidades"><i class="fas fa-hospital"></i> <span>Cadastro de Unidades</span></a></li>
-                <li><a href="#" data-page="usuarios"><i class="fas fa-users"></i> <span>Usuários</span></a></li>
-                <li><a href="#" data-page="logs"><i class="fas fa-clipboard-list"></i> <span>LOGS</span></a></li>
-            </ul>
-        </nav>
     </div>
-    <!-- Main Content -->
-    <div class="main-content">
+    <div id="app-shell" class="app-shell hidden">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <img src="https://i.ibb.co/BVX8Dx9x/controle-armarios.png" alt="Logo do Controle de Armários" class="sidebar-logo" onerror="this.classList.add('hidden');">
+                <div class="sidebar-title">Controle de Armários</div>
+                <p>Hospital Universitário do Ceará</p>
+            </div>
+            <nav class="sidebar-menu">
+                <ul>
+                    <li><a href="#" class="active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
+                    <li><a href="#" data-page="visitantes"><i class="fas fa-user-clock"></i> <span>Visitantes</span></a></li>
+                    <li><a href="#" data-page="acompanhantes"><i class="fas fa-user-friends"></i> <span>Acompanhantes</span></a></li>
+                    <li><a href="#" data-page="historico-visitantes"><i class="fas fa-history"></i> <span>Histórico Visitantes</span></a></li>
+                    <li><a href="#" data-page="historico-acompanhantes"><i class="fas fa-history"></i> <span>Histórico Acompanhantes</span></a></li>
+                    <li><a href="#" data-page="termo-responsabilidade"><i class="fas fa-file-signature"></i> <span>Termo de Responsabilidade</span></a></li>
+                    <li><a href="#" data-page="cadastro-armarios"><i class="fas fa-archive"></i> <span>Cadastro de Armários</span></a></li>
+                    <li><a href="#" data-page="cadastro-unidades"><i class="fas fa-hospital"></i> <span>Cadastro de Unidades</span></a></li>
+                    <li><a href="#" data-page="usuarios"><i class="fas fa-users"></i> <span>Usuários</span></a></li>
+                    <li><a href="#" data-page="logs"><i class="fas fa-clipboard-list"></i> <span>LOGS</span></a></li>
+                </ul>
+            </nav>
+        </div>
+        <!-- Main Content -->
+        <div class="main-content">
         <!-- Header -->
         <div class="header">
             <div class="header-title">
@@ -1456,13 +1611,13 @@
                 </div>
                 <div class="notification-bell" id="notification-bell">
                     <i class="fas fa-bell"></i>
-                    <span class="notification-badge">3</span>
+                    <span class="notification-badge">0</span>
                 </div>
-                <div class="user-profile">
-                    <div class="user-avatar">JS</div>
-                    <div>
-                        <div>João Silva</div>
-                        <div style="font-size: 0.8rem; color: #666;">Perfil geral</div>
+                <div class="user-profile" id="header-user-profile">
+                    <div class="user-avatar" id="header-user-avatar">--</div>
+                    <div class="user-details">
+                        <strong id="header-user-name">Usuário</strong>
+                        <span id="header-user-role">Perfil geral</span>
                     </div>
                 </div>
             </div>
@@ -1741,10 +1896,12 @@
                                 <tr>
                                     <th>ID</th>
                                     <th>Nome</th>
-                                    <th>Email</th>
+                                    <th>Matrícula</th>
                                     <th>Perfil</th>
-                                    <th>Acesso Visitantes</th>
-                                    <th>Acesso Acompanhantes</th>
+                                    <th>Visitantes</th>
+                                    <th>Acompanhantes</th>
+                                    <th>Unidades</th>
+                                    <th>Status</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -1836,14 +1993,25 @@
                         <input type="text" id="usuario-nome" class="form-control" required>
                     </div>
                     <div class="form-group">
-                        <label for="usuario-email">Email</label>
-                        <input type="email" id="usuario-email" class="form-control" required>
+                        <label for="usuario-email">Matrícula</label>
+                        <input type="text" id="usuario-email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="usuario-senha">Senha</label>
+                        <input type="text" id="usuario-senha" class="form-control" required>
                     </div>
                     <div class="form-group">
                         <label for="usuario-perfil">Perfil</label>
                         <select id="usuario-perfil" class="form-control" required>
                             <option value="usuario">Usuário</option>
                             <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="usuario-status">Status</label>
+                        <select id="usuario-status" class="form-control" required>
+                            <option value="ativo">Ativo</option>
+                            <option value="inativo">Inativo</option>
                         </select>
                     </div>
                     <div class="form-group" id="acessos-group">
@@ -1856,6 +2024,11 @@
                             <input type="checkbox" id="acesso-acompanhantes" checked>
                             <label for="acesso-acompanhantes">Acompanhantes</label>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Unidades com acesso</label>
+                        <div id="usuario-unidades" class="checkbox-grid"></div>
+                        <div class="field-hint">Selecione as unidades que o usuário pode visualizar.</div>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="usuario-btn-cancelar">Cancelar</button>
@@ -2173,6 +2346,7 @@
             </div>
         </div>
     </div>
+    </div>
     <script>
         // URL do Google Apps Script - ATUALIZE COM SUA URL
         const SCRIPT_URL = 'https://script.google.com/a/macros/isgh.org.br/s/AKfycbzbGb6sQR1auYsyTB-kwPos7Cd7swLuTUDiAzzpwTPW2cj76ykYzKYgBDXA-g5ef7pbpw/exec';
@@ -2191,10 +2365,18 @@
             movimentacoes: {},
             usuarios: [],
             logs: [],
-            carregamentoTermosId: 0
+            carregamentoTermosId: 0,
+            autenticado: false,
+            usuarioAutenticado: null
         };
         // Elementos DOM
         const elementos = {
+            loginContainer: document.getElementById('login-container'),
+            appShell: document.getElementById('app-shell'),
+            loginForm: document.getElementById('login-form'),
+            loginMatricula: document.getElementById('login-matricula'),
+            loginSenha: document.getElementById('login-senha'),
+            loginSubmit: document.getElementById('login-submit'),
             profileSelect: document.getElementById('profile-select'),
             unitSelect: document.getElementById('unit-select'),
             notificationBell: document.getElementById('notification-bell'),
@@ -2206,6 +2388,10 @@
             modalTitle: document.getElementById('modal-title'),
             armarioForm: document.getElementById('armario-form'),
             usuarioForm: document.getElementById('usuario-form'),
+            usuarioModalTitle: document.getElementById('usuario-modal-title'),
+            usuarioSenha: document.getElementById('usuario-senha'),
+            usuarioStatus: document.getElementById('usuario-status'),
+            usuarioUnidades: document.getElementById('usuario-unidades'),
             modalClose: document.getElementById('modal-close'),
             usuarioModalClose: document.getElementById('usuario-modal-close'),
             btnCancelar: document.getElementById('btn-cancelar'),
@@ -2222,6 +2408,9 @@
             },
             pages: document.querySelectorAll('.page'),
             menuLinks: document.querySelectorAll('.sidebar-menu a'),
+            headerUserAvatar: document.getElementById('header-user-avatar'),
+            headerUserName: document.getElementById('header-user-name'),
+            headerUserRole: document.getElementById('header-user-role'),
             termoModal: document.getElementById('termo-modal'),
             termoForm: document.getElementById('termo-form'),
             termoModalClose: document.getElementById('termo-modal-close'),
@@ -2265,10 +2454,16 @@
             liberacaoMetodoRadios: document.querySelectorAll('input[name="liberacao-metodo"]'),
             btnNovaUnidade: document.getElementById('btn-nova-unidade'),
             tabelaUnidades: document.getElementById('tabela-unidades'),
-            tabelaUnidadesBody: document.querySelector('#tabela-unidades tbody')
+            tabelaUnidadesBody: document.querySelector('#tabela-unidades tbody'),
+            tabelaUsuarios: document.getElementById('tabela-usuarios'),
+            tabelaUsuariosBody: document.querySelector('#tabela-usuarios tbody')
         };
         const customSelectorInstances = new WeakMap();
         const customSelectorStore = new Set();
+        const paginasRestritasUsuario = new Set(['cadastro-armarios', 'cadastro-unidades', 'usuarios', 'logs']);
+        let aplicacaoInicializada = false;
+        let loginInicializado = false;
+        let eventosInicializados = false;
         function aprimorarSeletoresCabecalho() {
             document.querySelectorAll('.selector-control .selector-input').forEach(select => criarSelectorPersonalizado(select));
         }
@@ -2532,6 +2727,135 @@
             }
         });
         const normalizarTexto = (valor) => (valor ?? '').toString().trim().toLowerCase();
+        function obterUsuarioAutenticado() {
+            return estado.usuarioAutenticado || null;
+        }
+        function perfilAtualEhAdmin() {
+            const usuario = obterUsuarioAutenticado();
+            return usuario ? normalizarTexto(usuario.perfil) === 'admin' : false;
+        }
+        function normalizarListaDeUnidades(unidades) {
+            if (!unidades) return [];
+            if (Array.isArray(unidades)) {
+                return unidades.map(valor => (valor ?? '').toString().trim()).filter(valor => valor);
+            }
+            return unidades.toString().split(';').map(valor => valor.trim()).filter(valor => valor);
+        }
+        function obterIdsPermitidos() {
+            const usuario = obterUsuarioAutenticado();
+            if (!usuario) {
+                return [];
+            }
+            const unidadesNormalizadas = normalizarListaDeUnidades(usuario.unidades);
+            if (perfilAtualEhAdmin() || unidadesNormalizadas.some(valor => normalizarTexto(valor) === 'all')) {
+                return null;
+            }
+            return unidadesNormalizadas;
+        }
+        function obterUnidadesPermitidas() {
+            const idsPermitidos = obterIdsPermitidos();
+            if (idsPermitidos === null) {
+                return estado.unidades.slice();
+            }
+            if (!idsPermitidos.length) {
+                return [];
+            }
+            return estado.unidades.filter(unidade => idsPermitidos.includes(String(unidade.id)));
+        }
+        function usuarioPodeVerUnidade(unidadeReferencia) {
+            const idsPermitidos = obterIdsPermitidos();
+            if (idsPermitidos === null) {
+                return true;
+            }
+            if (!idsPermitidos.length) {
+                return false;
+            }
+            const referencia = (unidadeReferencia ?? '').toString().trim();
+            if (!referencia) {
+                return false;
+            }
+            if (idsPermitidos.includes(referencia)) {
+                return true;
+            }
+            const referenciaNormalizada = normalizarTexto(referencia);
+            const unidadeEncontrada = estado.unidades.find(unidade => {
+                const nomeNormalizado = normalizarTexto(unidade.nome);
+                return nomeNormalizado === referenciaNormalizada || String(unidade.id) === referencia;
+            });
+            if (!unidadeEncontrada) {
+                return false;
+            }
+            return idsPermitidos.includes(String(unidadeEncontrada.id));
+        }
+        function filtrarListaPorPermissao(lista, extrator) {
+            if (!Array.isArray(lista)) return [];
+            return lista.filter(item => usuarioPodeVerUnidade(extrator ? extrator(item) : item));
+        }
+        function usuarioTemAcessoPagina(pagina) {
+            if (!estado.autenticado) return false;
+            if (perfilAtualEhAdmin()) return true;
+            return !paginasRestritasUsuario.has(pagina);
+        }
+        function gerarIniciais(nome) {
+            if (!nome) return '--';
+            const partes = nome.trim().split(/\s+/).filter(Boolean);
+            if (partes.length >= 2) {
+                return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+            }
+            const unica = partes[0];
+            return unica.slice(0, Math.min(2, unica.length)).toUpperCase();
+        }
+        function obterDescricaoUnidades(unidadesLista) {
+            const lista = normalizarListaDeUnidades(unidadesLista);
+            if (!lista.length) {
+                return 'Nenhuma';
+            }
+            if (lista.some(valor => normalizarTexto(valor) === 'all')) {
+                return 'Todas';
+            }
+            const nomes = lista.map(id => {
+                const unidade = estado.unidades.find(item => String(item.id) === String(id));
+                return unidade ? unidade.nome : `ID ${id}`;
+            });
+            return nomes.join(', ');
+        }
+        function atualizarCabecalhoUsuario() {
+            if (!elementos.headerUserName || !elementos.headerUserAvatar || !elementos.headerUserRole) {
+                return;
+            }
+            const usuario = obterUsuarioAutenticado();
+            if (!usuario) {
+                elementos.headerUserName.textContent = 'Usuário';
+                elementos.headerUserRole.textContent = '';
+                elementos.headerUserAvatar.textContent = '--';
+                return;
+            }
+            const nomeLimpo = (usuario.nome || 'Usuário').toString().trim();
+            elementos.headerUserName.textContent = nomeLimpo;
+            elementos.headerUserRole.textContent = perfilAtualEhAdmin() ? 'Administrador' : 'Usuário';
+            elementos.headerUserAvatar.textContent = gerarIniciais(nomeLimpo);
+        }
+        function aplicarPermissoesMenu() {
+            if (!elementos.menuLinks) return;
+            elementos.menuLinks.forEach(link => {
+                const pagina = link.dataset.page;
+                const permitido = usuarioTemAcessoPagina(pagina);
+                link.parentElement.style.display = permitido ? '' : 'none';
+            });
+            const botoesRestritos = [
+                document.getElementById('btn-novo-armario'),
+                document.getElementById('btn-nova-unidade'),
+                document.getElementById('btn-novo-usuario')
+            ];
+            botoesRestritos.forEach(botao => {
+                if (!botao) return;
+                botao.style.display = perfilAtualEhAdmin() ? '' : 'none';
+            });
+            if (!usuarioTemAcessoPagina(estado.paginaAtual)) {
+                estado.paginaAtual = 'dashboard';
+                navegarParaPagina('dashboard');
+            }
+        }
         const termoSteps = Array.from(document.querySelectorAll('#termo-form .wizard-step'));
         let termoPassoAtual = 0;
         let termoArmarioAtual = null;
@@ -2544,10 +2868,7 @@
         let liberacaoRequisitosOk = false;
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
-            aprimorarSeletoresCabecalho();
-            inicializarCanvasAssinatura();
-            inicializarEventos();
-            carregarDadosIniciais();
+            inicializarLogin();
         });
         // Função para chamar o Google Apps Script
         async function callGoogleScript(action, data = {}) {
@@ -2600,29 +2921,97 @@
                 return { success: false, error: error.message, _erroNotificado: true };
             }
         }
+        async function inicializarAplicacao() {
+            if (aplicacaoInicializada) {
+                await carregarDadosIniciais();
+                atualizarCabecalhoUsuario();
+                aplicarPermissoesMenu();
+                carregarDadosTabelas();
+                return;
+            }
+            aplicacaoInicializada = true;
+            aprimorarSeletoresCabecalho();
+            inicializarCanvasAssinatura();
+            inicializarEventos();
+            await carregarDadosIniciais();
+            atualizarCabecalhoUsuario();
+            aplicarPermissoesMenu();
+            carregarDadosTabelas();
+        }
+        function inicializarLogin() {
+            if (typeof loginInicializado !== 'undefined' && loginInicializado) {
+                return;
+            }
+            loginInicializado = true;
+            if (!elementos.loginForm) {
+                return;
+            }
+            elementos.loginForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const matricula = elementos.loginMatricula?.value.trim();
+                const senha = elementos.loginSenha?.value.trim();
+                if (!matricula || !senha) {
+                    mostrarErro('Informe matrícula e senha.');
+                    return;
+                }
+                const finalizarLoading = iniciarLoadingBotao(elementos.loginSubmit);
+                try {
+                    const resultado = await callGoogleScript('autenticarUsuario', { matricula, senha });
+                    if (!resultado.success) {
+                        mostrarErro(resultado.error || 'Credenciais inválidas');
+                        return;
+                    }
+                    const usuario = resultado.usuario || {};
+                    usuario.perfil = (usuario.perfil || 'usuario').toString().trim().toLowerCase();
+                    usuario.unidades = normalizarListaDeUnidades(usuario.unidades);
+                    estado.usuarioAutenticado = usuario;
+                    estado.autenticado = true;
+                    elementos.loginSenha.value = '';
+                    if (elementos.loginContainer) {
+                        elementos.loginContainer.classList.add('hidden');
+                    }
+                    if (elementos.appShell) {
+                        elementos.appShell.classList.remove('hidden');
+                    }
+                    atualizarCabecalhoUsuario();
+                    aplicarPermissoesMenu();
+                    await inicializarAplicacao();
+                } catch (error) {
+                    console.error('Erro ao autenticar usuário:', error);
+                    mostrarErro('Não foi possível realizar o login. Tente novamente.');
+                } finally {
+                    finalizarLoading();
+                }
+            });
+        }
         async function carregarDadosIniciais() {
+            if (!estado.autenticado) {
+                return;
+            }
             try {
                 // Verificar inicialização
                 const resultado = await callGoogleScript('verificarInicializacao');
                 if (!resultado.success || !resultado.inicializado) {
                     await callGoogleScript('inicializarPlanilha');
                 }
-                // Carregar dados
+                await carregarUnidades();
                 await Promise.all([
-                    carregarArmarios(),
-                    carregarUnidades(),
+                    carregarArmarios({ forcarAtualizacao: true }),
                     carregarUsuarios(),
                     carregarEstatisticas(),
                     carregarNotificacoes()
                 ]);
                 atualizarInterface();
-               
+
             } catch (error) {
                 console.error('Erro ao carregar dados iniciais:', error);
                 mostrarErro('Erro ao carregar dados do sistema');
             }
         }
         async function carregarArmarios({ forcarAtualizacao = false } = {}) {
+            if (!estado.autenticado) {
+                return;
+            }
             if (!forcarAtualizacao && estado.armariosCarregados) {
                 return;
             }
@@ -2632,10 +3021,11 @@
             });
 
             if (resultado.success) {
-                estado.armarios = resultado.data.map(armario => ({
+                const armariosProcessados = (resultado.data || []).map(armario => ({
                     ...armario,
                     unidade: armario.unidade ? armario.unidade.trim() : ''
                 }));
+                estado.armarios = filtrarListaPorPermissao(armariosProcessados, item => item.unidade);
                 estado.armariosCarregados = true;
                 atualizarResumoDashboardLocal();
             } else {
@@ -2643,6 +3033,9 @@
             }
         }
         async function carregarUnidades() {
+            if (!estado.autenticado) {
+                return;
+            }
             const resultado = await callGoogleScript('getUnidades');
             if (resultado.success) {
                 estado.unidades = resultado.data.map(unidade => ({
@@ -2650,22 +3043,37 @@
                     nome: unidade.nome ? unidade.nome.trim() : ''
                 }));
                 atualizarSeletoresUnidade();
+                if (estado.unidadeAtual !== 'todas' && !usuarioPodeVerUnidade(estado.unidadeAtual)) {
+                    estado.unidadeAtual = 'todas';
+                }
             }
         }
         async function carregarUsuarios() {
+            if (!estado.autenticado || !perfilAtualEhAdmin()) {
+                estado.usuarios = [];
+                return;
+            }
             const resultado = await callGoogleScript('getUsuarios');
             if (resultado.success) {
-                estado.usuarios = resultado.data;
+                estado.usuarios = (resultado.data || []).map(usuario => ({
+                    ...usuario,
+                    unidades: normalizarListaDeUnidades(usuario.unidades)
+                }));
             }
         }
         async function carregarEstatisticas() {
             atualizarResumoDashboardLocal();
         }
         async function carregarNotificacoes() {
+            if (!estado.autenticado) {
+                return;
+            }
             const resultado = await callGoogleScript('getNotificacoes');
             if (resultado.success) {
                 estado.notificacoes = resultado.data;
-                elementos.notificationBadge.textContent = estado.notificacoes.length;
+                if (elementos.notificationBadge) {
+                    elementos.notificationBadge.textContent = estado.notificacoes.length;
+                }
                 atualizarPainelNotificacoes();
             }
         }
@@ -2794,6 +3202,10 @@
         }
         // Configuração de eventos
         function inicializarEventos() {
+            if (eventosInicializados) {
+                return;
+            }
+            eventosInicializados = true;
             // Seletor de perfil
             if (elementos.profileSelect) {
                 elementos.profileSelect.addEventListener('change', async function() {
@@ -2939,6 +3351,12 @@
                     }
                 });
             }
+            if (elementos.tabelaUsuariosBody) {
+                elementos.tabelaUsuariosBody.addEventListener('click', tratarAcaoUsuario);
+            }
+            if (elementos.usuarioUnidades) {
+                elementos.usuarioUnidades.addEventListener('change', tratarAlteracaoUnidadeUsuario);
+            }
             // Liberação de armário
             elementos.liberacaoModalClose.addEventListener('click', fecharModalLiberacao);
             elementos.liberacaoBtnCancelar.addEventListener('click', fecharModalLiberacao);
@@ -2970,20 +3388,28 @@
         }
         // Navegação entre páginas
         function navegarParaPagina(pagina) {
+            if (!usuarioTemAcessoPagina(pagina)) {
+                mostrarErro('Você não tem permissão para acessar esta área.');
+                return;
+            }
             // Atualizar menu ativo
             elementos.menuLinks.forEach(link => link.classList.remove('active'));
-            document.querySelector(`[data-page="${pagina}"]`).classList.add('active');
-           
+            const linkAlvo = document.querySelector(`[data-page="${pagina}"]`);
+            if (!linkAlvo) {
+                return;
+            }
+            linkAlvo.classList.add('active');
+
             // Atualizar página ativa
             elementos.pages.forEach(page => page.classList.remove('active'));
             document.getElementById(pagina).classList.add('active');
-           
+
             // Atualizar título
-            const pageTitle = document.querySelector(`[data-page="${pagina}"] span`).textContent;
+            const pageTitle = linkAlvo.querySelector('span')?.textContent || '';
             document.querySelector('.header-title h1').textContent = pageTitle;
-           
+
             estado.paginaAtual = pagina;
-           
+
             // Carregar dados específicos da página
             carregarDadosTabelas();
         }
@@ -3221,31 +3647,36 @@
             await carregarArmarios();
             tbodyVisitantes.innerHTML = '';
             const filtroNormalizado = normalizarTexto(unidadeFiltro);
-            estado.armarios
+            const armariosVisitantes = estado.armarios
                 .filter(armario => normalizarTexto(armario.tipo) === 'visitante')
                 .filter(a => filtroNormalizado === 'todas' || normalizarTexto(a.unidade) === filtroNormalizado)
-                .forEach(armario => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${armario.numero}</td>
-                        <td>${armario.unidade || '-'}</td>
-                        <td><span class="armario-status status-${armario.status}">${formatarStatusArmario(armario.status)}</span></td>
-                        <td>${armario.nomeVisitante || '-'}</td>
-                        <td>${armario.nomePaciente || '-'}</td>
-                        <td>${armario.leito || '-'}</td>
-                        <td>${armario.volumes || '-'}</td>
-                        <td>${armario.horaInicio || '-'}</td>
-                        <td>${armario.horaPrevista || '-'}</td>
-                        <td>${armario.whatsapp || '-'}</td>
-                        <td>
-                            ${armario.status !== 'livre'
-                                ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="visitante">Liberar</button>`
-                                : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
-                            }
-                        </td>
-                    `;
-                    tbodyVisitantes.appendChild(tr);
-                });
+                .filter(a => usuarioPodeVerUnidade(a.unidade));
+            if (!armariosVisitantes.length) {
+                tbodyVisitantes.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum armário encontrado.</td></tr>';
+                return;
+            }
+            armariosVisitantes.forEach(armario => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${armario.numero}</td>
+                    <td>${armario.unidade || '-'}</td>
+                    <td><span class="armario-status status-${armario.status}">${formatarStatusArmario(armario.status)}</span></td>
+                    <td>${armario.nomeVisitante || '-'}</td>
+                    <td>${armario.nomePaciente || '-'}</td>
+                    <td>${armario.leito || '-'}</td>
+                    <td>${armario.volumes || '-'}</td>
+                    <td>${armario.horaInicio || '-'}</td>
+                    <td>${armario.horaPrevista || '-'}</td>
+                    <td>${armario.whatsapp || '-'}</td>
+                    <td>
+                        ${armario.status !== 'livre'
+                            ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="visitante">Liberar</button>`
+                            : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
+                        }
+                    </td>
+                `;
+                tbodyVisitantes.appendChild(tr);
+            });
         }
         async function carregarTabelaAcompanhantes(unidadeFiltro) {
             const tbodyAcompanhantes = document.querySelector('#tabela-acompanhantes tbody');
@@ -3253,32 +3684,40 @@
             await carregarArmarios();
             tbodyAcompanhantes.innerHTML = '';
             const filtroNormalizado = normalizarTexto(unidadeFiltro);
-            estado.armarios
+            const armariosAcompanhantes = estado.armarios
                 .filter(armario => normalizarTexto(armario.tipo) === 'acompanhante')
                 .filter(a => filtroNormalizado === 'todas' || normalizarTexto(a.unidade) === filtroNormalizado)
-                .forEach(armario => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${armario.numero}</td>
-                        <td>${armario.unidade || '-'}</td>
-                        <td><span class="armario-status status-${armario.status}">${formatarStatusArmario(armario.status)}</span></td>
-                        <td>${armario.nomeVisitante || '-'}</td>
-                        <td>${armario.nomePaciente || '-'}</td>
-                        <td>${armario.leito || '-'}</td>
-                        <td>${armario.volumes || '-'}</td>
-                        <td>${armario.horaInicio || '-'}</td>
-                        <td>${armario.whatsapp || '-'}</td>
-                        <td>
-                            ${armario.status !== 'livre'
-                                ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="acompanhante">Liberar</button>
-                                   <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
-                                   ${armario.termoInfo ? (armario.termoFinalizado ? '' : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`) : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`}`
-                                : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
-                            }
-                        </td>
-                    `;
-                    tbodyAcompanhantes.appendChild(tr);
-                });
+                .filter(a => usuarioPodeVerUnidade(a.unidade));
+            if (!armariosAcompanhantes.length) {
+                tbodyAcompanhantes.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum armário encontrado.</td></tr>';
+                return;
+            }
+            armariosAcompanhantes.forEach(armario => {
+                const tr = document.createElement('tr');
+                const botoesTermo = armario.status !== 'livre'
+                    ? `${armario.termoInfo ? (armario.termoFinalizado ? '' : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`) : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`}`
+                    : '';
+                tr.innerHTML = `
+                    <td>${armario.numero}</td>
+                    <td>${armario.unidade || '-'}</td>
+                    <td><span class="armario-status status-${armario.status}">${formatarStatusArmario(armario.status)}</span></td>
+                    <td>${armario.nomeVisitante || '-'}</td>
+                    <td>${armario.nomePaciente || '-'}</td>
+                    <td>${armario.leito || '-'}</td>
+                    <td>${armario.volumes || '-'}</td>
+                    <td>${armario.horaInicio || '-'}</td>
+                    <td>${armario.whatsapp || '-'}</td>
+                    <td>
+                        ${armario.status !== 'livre'
+                            ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="acompanhante">Liberar</button>
+                               <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                               ${botoesTermo}`
+                            : `<button class="btn-small btn-primary" data-action="usar" data-id="${armario.id}">Usar</button>`
+                        }
+                    </td>
+                `;
+                tbodyAcompanhantes.appendChild(tr);
+            });
         }
         async function carregarHistoricoVisitantes() {
             const tbody = document.querySelector('#tabela-historico-visitantes tbody');
@@ -3286,7 +3725,12 @@
             const resultado = await callGoogleScript('getHistorico', { tipo: 'visitante' });
             if (!resultado.success) return;
             tbody.innerHTML = '';
-            resultado.data.forEach(historico => {
+            const registros = (resultado.data || []).filter(item => usuarioPodeVerUnidade(item.unidade));
+            if (!registros.length) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum registro encontrado.</td></tr>';
+                return;
+            }
+            registros.forEach(historico => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${formatarData(historico.data)}</td>
@@ -3309,7 +3753,12 @@
             const resultado = await callGoogleScript('getHistorico', { tipo: 'acompanhante' });
             if (!resultado.success) return;
             tbody.innerHTML = '';
-            resultado.data.forEach(historico => {
+            const registros = (resultado.data || []).filter(item => usuarioPodeVerUnidade(item.unidade));
+            if (!registros.length) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum registro encontrado.</td></tr>';
+                return;
+            }
+            registros.forEach(historico => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${formatarData(historico.data)}</td>
@@ -3426,38 +3875,22 @@
                 ...armario,
                 unidade: armario.unidade ? armario.unidade.trim() : ''
             }));
-            estado.cadastroArmarios
+            const armariosFiltrados = estado.cadastroArmarios
                 .filter(armario => filtroNormalizado === 'todas' || normalizarTexto(armario.unidade) === filtroNormalizado)
-                .forEach(armario => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${armario.id}</td>
-                        <td>${armario.numero}</td>
-                        <td>${armario.tipo === 'visitante' ? 'Visitante' : 'Acompanhante'}</td>
-                        <td>${armario.unidade || '-'}</td>
-                        <td>${armario.localizacao || '-'}</td>
-                        <td>${armario.status}</td>
-                        <td>
-                            <button class="btn-small btn-edit">Editar</button>
-                            <button class="btn-small btn-danger">Excluir</button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-        }
-        async function carregarTabelaUsuarios() {
-            const tbody = document.querySelector('#tabela-usuarios tbody');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-            estado.usuarios.forEach(usuario => {
+                .filter(armario => usuarioPodeVerUnidade(armario.unidade));
+            if (!armariosFiltrados.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum armário cadastrado para esta unidade.</td></tr>';
+                return;
+            }
+            armariosFiltrados.forEach(armario => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${usuario.id}</td>
-                    <td>${usuario.nome}</td>
-                    <td>${usuario.email}</td>
-                    <td>${usuario.perfil === 'admin' ? 'Administrador' : 'Usuário'}</td>
-                    <td>${usuario.acessoVisitantes ? 'Sim' : 'Não'}</td>
-                    <td>${usuario.acessoAcompanhantes ? 'Sim' : 'Não'}</td>
+                    <td>${armario.id}</td>
+                    <td>${armario.numero}</td>
+                    <td>${armario.tipo === 'visitante' ? 'Visitante' : 'Acompanhante'}</td>
+                    <td>${armario.unidade || '-'}</td>
+                    <td>${armario.localizacao || '-'}</td>
+                    <td>${armario.status}</td>
                     <td>
                         <button class="btn-small btn-edit">Editar</button>
                         <button class="btn-small btn-danger">Excluir</button>
@@ -3465,6 +3898,167 @@
                 `;
                 tbody.appendChild(tr);
             });
+        }
+        async function carregarTabelaUsuarios() {
+            const tbody = elementos.tabelaUsuariosBody;
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (!perfilAtualEhAdmin()) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:12px; color:#c0392b;">Apenas administradores podem visualizar os usuários.</td></tr>';
+                return;
+            }
+            if (!estado.usuarios.length) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum usuário cadastrado.</td></tr>';
+                return;
+            }
+            estado.usuarios.forEach(usuario => {
+                const tr = document.createElement('tr');
+                const perfilDescricao = usuario.perfil === 'admin' ? 'Administrador' : 'Usuário';
+                const unidadesDescricao = obterDescricaoUnidades(usuario.unidades);
+                const statusDescricao = normalizarTexto(usuario.status) === 'ativo' ? 'Ativo' : 'Inativo';
+                tr.innerHTML = `
+                    <td>${usuario.id}</td>
+                    <td>${usuario.nome}</td>
+                    <td>${usuario.email}</td>
+                    <td>${perfilDescricao}</td>
+                    <td>${usuario.acessoVisitantes ? 'Sim' : 'Não'}</td>
+                    <td>${usuario.acessoAcompanhantes ? 'Sim' : 'Não'}</td>
+                    <td>${unidadesDescricao}</td>
+                    <td>${statusDescricao}</td>
+                    <td>
+                        <button class="btn-small btn-edit" data-acao-usuario="editar" data-id="${usuario.id}">Editar</button>
+                        <button class="btn-small btn-danger" data-acao-usuario="excluir" data-id="${usuario.id}">Excluir</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        function renderizarOpcoesUnidadesFormulario(selecionadas = []) {
+            if (!elementos.usuarioUnidades) return;
+            const selecionadasNormalizadas = normalizarListaDeUnidades(selecionadas);
+            const incluiTodas = selecionadasNormalizadas.some(valor => normalizarTexto(valor) === 'all');
+            const unidadesDisponiveis = estado.unidades.slice();
+            if (!unidadesDisponiveis.length) {
+                elementos.usuarioUnidades.innerHTML = '<span class="field-hint">Cadastre unidades antes de atribuir acessos.</span>';
+                return;
+            }
+            const partes = [];
+            if (perfilAtualEhAdmin()) {
+                partes.push(`<label><input type="checkbox" value="all" ${incluiTodas ? 'checked' : ''}> Todas as unidades</label>`);
+            }
+            unidadesDisponiveis.forEach(unidade => {
+                const id = String(unidade.id);
+                const checked = !incluiTodas && selecionadasNormalizadas.includes(id) ? 'checked' : '';
+                const disabled = incluiTodas ? 'disabled' : '';
+                partes.push(`<label><input type="checkbox" value="${id}" ${checked} ${disabled}> ${unidade.nome}</label>`);
+            });
+            elementos.usuarioUnidades.innerHTML = partes.join('');
+        }
+        function obterUnidadesSelecionadasFormulario() {
+            if (!elementos.usuarioUnidades) return [];
+            const selecionados = Array.from(elementos.usuarioUnidades.querySelectorAll('input[type="checkbox"]:checked'))
+                .map(input => input.value);
+            if (selecionados.includes('all')) {
+                return ['all'];
+            }
+            return selecionados;
+        }
+        function tratarAlteracaoUnidadeUsuario(evento) {
+            const input = evento.target;
+            if (!input || input.type !== 'checkbox') return;
+            if (input.value === 'all') {
+                const marcarTodas = input.checked;
+                elementos.usuarioUnidades.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                    if (checkbox.value !== 'all') {
+                        checkbox.checked = false;
+                        checkbox.disabled = marcarTodas;
+                    }
+                });
+            } else {
+                const todas = elementos.usuarioUnidades.querySelector('input[type="checkbox"][value="all"]');
+                if (todas && todas.checked) {
+                    todas.checked = false;
+                    elementos.usuarioUnidades.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.disabled = false;
+                    });
+                }
+            }
+        }
+        function tratarAcaoUsuario(evento) {
+            const botao = evento.target.closest('[data-acao-usuario]');
+            if (!botao) return;
+            const id = parseInt(botao.dataset.id, 10);
+            if (Number.isNaN(id)) return;
+            const acao = botao.dataset.acaoUsuario;
+            if (acao === 'editar') {
+                abrirModalEditarUsuario(id);
+            } else if (acao === 'excluir') {
+                confirmarExclusaoUsuario(id, botao);
+            }
+        }
+        function abrirModalEditarUsuario(id) {
+            if (!perfilAtualEhAdmin()) {
+                mostrarErro('Apenas administradores podem editar usuários.');
+                return;
+            }
+            const usuario = estado.usuarios.find(u => Number(u.id) === Number(id));
+            if (!usuario) {
+                mostrarErro('Usuário não encontrado.');
+                return;
+            }
+            elementos.usuarioForm.reset();
+            elementos.usuarioForm.dataset.id = String(id);
+            if (elementos.usuarioModalTitle) {
+                elementos.usuarioModalTitle.textContent = 'Editar Usuário';
+            }
+            document.getElementById('usuario-nome').value = usuario.nome || '';
+            document.getElementById('usuario-email').value = usuario.email || '';
+            if (elementos.usuarioSenha) {
+                elementos.usuarioSenha.value = usuario.senha || '';
+            }
+            if (elementos.usuarioStatus) {
+                elementos.usuarioStatus.value = usuario.status || 'ativo';
+            }
+            document.getElementById('usuario-perfil').value = usuario.perfil || 'usuario';
+            document.getElementById('acesso-visitantes').checked = Boolean(usuario.acessoVisitantes);
+            document.getElementById('acesso-acompanhantes').checked = Boolean(usuario.acessoAcompanhantes);
+            renderizarOpcoesUnidadesFormulario(usuario.unidades);
+            elementos.usuarioModal.style.display = 'flex';
+        }
+        async function confirmarExclusaoUsuario(id, botao) {
+            if (!perfilAtualEhAdmin()) {
+                mostrarErro('Apenas administradores podem excluir usuários.');
+                return;
+            }
+            const usuario = estado.usuarios.find(u => Number(u.id) === Number(id));
+            if (!usuario) {
+                mostrarErro('Usuário não encontrado.');
+                return;
+            }
+            const resultado = await Swal.fire({
+                title: 'Excluir usuário',
+                text: `Deseja remover ${usuario.nome}?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, excluir',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!resultado.isConfirmed) {
+                return;
+            }
+            const finalizar = botao ? iniciarLoadingBotao(botao) : () => {};
+            try {
+                const resposta = await callGoogleScript('excluirUsuario', { id });
+                if (resposta.success) {
+                    await carregarUsuarios();
+                    carregarTabelaUsuarios();
+                    mostrarSucesso('Usuário excluído com sucesso');
+                } else {
+                    notificarErroPadrao(resposta);
+                }
+            } finally {
+                finalizar();
+            }
         }
         async function carregarTabelaLogs() {
             const tbody = document.querySelector('#tabela-logs tbody');
@@ -3867,8 +4461,21 @@
         }
         // Abrir modal para novo usuário
         function abrirModalNovoUsuario() {
+            if (!perfilAtualEhAdmin()) {
+                mostrarErro('Apenas administradores podem cadastrar usuários.');
+                return;
+            }
             elementos.usuarioForm.reset();
-            document.getElementById('usuario-modal-title').textContent = 'Cadastrar Usuário';
+            elementos.usuarioForm.dataset.id = '';
+            if (elementos.usuarioModalTitle) {
+                elementos.usuarioModalTitle.textContent = 'Cadastrar Usuário';
+            }
+            if (elementos.usuarioStatus) {
+                elementos.usuarioStatus.value = 'ativo';
+            }
+            if (elementos.usuarioUnidades) {
+                renderizarOpcoesUnidadesFormulario();
+            }
             elementos.usuarioModal.style.display = 'flex';
         }
         // Fechar modais
@@ -3877,6 +4484,9 @@
         }
         function fecharModalUsuario() {
             elementos.usuarioModal.style.display = 'none';
+            if (elementos.usuarioForm) {
+                elementos.usuarioForm.dataset.id = '';
+            }
         }
         // Salvar armário (cadastro)
         async function salvarArmario() {
@@ -3924,21 +4534,33 @@
         }
         // Salvar usuário
         async function salvarUsuario() {
+            if (!perfilAtualEhAdmin()) {
+                mostrarErro('Apenas administradores podem salvar usuários.');
+                return;
+            }
+            const usuarioId = elementos.usuarioForm.dataset.id;
             const dados = {
+                id: usuarioId,
                 nome: document.getElementById('usuario-nome').value.trim(),
                 email: document.getElementById('usuario-email').value.trim(),
+                senha: elementos.usuarioSenha ? elementos.usuarioSenha.value.trim() : '',
                 perfil: document.getElementById('usuario-perfil').value,
+                status: elementos.usuarioStatus ? elementos.usuarioStatus.value : 'ativo',
                 acessoVisitantes: document.getElementById('acesso-visitantes').checked,
-                acessoAcompanhantes: document.getElementById('acesso-acompanhantes').checked
+                acessoAcompanhantes: document.getElementById('acesso-acompanhantes').checked,
+                unidades: obterUnidadesSelecionadasFormulario()
             };
-            const resultado = await callGoogleScript('cadastrarUsuario', dados);
+            if (!dados.unidades.length && dados.perfil !== 'admin') {
+                mostrarErro('Selecione ao menos uma unidade para o usuário.');
+                return;
+            }
+            const acao = usuarioId ? 'atualizarUsuario' : 'cadastrarUsuario';
+            const resultado = await callGoogleScript(acao, dados);
             if (resultado.success) {
                 fecharModalUsuario();
-                mostrarSucesso('Usuário cadastrado com sucesso');
-               
-                // Recarregar usuários
+                mostrarSucesso(usuarioId ? 'Usuário atualizado com sucesso' : 'Usuário cadastrado com sucesso');
                 await carregarUsuarios();
-                carregarDadosTabelas();
+                carregarTabelaUsuarios();
             } else {
                 notificarErroPadrao(resultado);
             }

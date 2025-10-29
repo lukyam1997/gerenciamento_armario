@@ -124,9 +124,9 @@ function inicializarPlanilha() {
         nome: 'Unidades', 
         cabecalhos: ['ID', 'Nome', 'Status', 'Data Cadastro'] 
       },
-      { 
-        nome: 'Usuários', 
-        cabecalhos: ['ID', 'Nome', 'Email', 'Perfil', 'Acesso Visitantes', 'Acesso Acompanhantes', 'Data Cadastro', 'Status'] 
+      {
+        nome: 'Usuários',
+        cabecalhos: ['ID', 'Nome', 'Email', 'Perfil', 'Acesso Visitantes', 'Acesso Acompanhantes', 'Data Cadastro', 'Status', 'Senha', 'Unidades']
       },
       { 
         nome: 'LOGS', 
@@ -196,8 +196,8 @@ function adicionarDadosIniciais() {
   // Cadastrar usuário admin inicial
   var usuariosSheet = ss.getSheetByName('Usuários');
   if (usuariosSheet.getLastRow() === 1) {
-    usuariosSheet.getRange(2, 1, 1, 8)
-      .setValues([[1, 'Administrador', 'admin@hospital.com', 'admin', true, true, new Date(), 'ativo']]);
+    usuariosSheet.getRange(2, 1, 1, 10)
+      .setValues([[1, 'Administrador', 'admin', 'admin', true, true, new Date(), 'ativo', 'admin123', 'all']]);
   }
 
   // Cadastrar unidades iniciais
@@ -235,6 +235,18 @@ function handlePost(e) {
       
       case 'cadastrarUsuario':
         return ContentService.createTextOutput(JSON.stringify(cadastrarUsuario(e.parameter)))
+          .setMimeType(ContentService.MimeType.JSON);
+
+      case 'atualizarUsuario':
+        return ContentService.createTextOutput(JSON.stringify(atualizarUsuario(e.parameter)))
+          .setMimeType(ContentService.MimeType.JSON);
+
+      case 'excluirUsuario':
+        return ContentService.createTextOutput(JSON.stringify(excluirUsuario(e.parameter)))
+          .setMimeType(ContentService.MimeType.JSON);
+
+      case 'autenticarUsuario':
+        return ContentService.createTextOutput(JSON.stringify(autenticarUsuario(e.parameter)))
           .setMimeType(ContentService.MimeType.JSON);
       
       case 'getLogs':
@@ -710,7 +722,7 @@ function getUsuarios() {
     }
 
     var estrutura = obterEstruturaPlanilha(sheet);
-    var totalColunas = estrutura.ultimaColuna || 8;
+    var totalColunas = estrutura.ultimaColuna || 10;
     var dados = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
     var usuarios = [];
 
@@ -723,6 +735,14 @@ function getUsuarios() {
       var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
       var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
 
+      var unidadesBrutas = obterValorLinha(linha, estrutura, 'unidades', '');
+      var unidades = [];
+      if (typeof unidadesBrutas === 'string') {
+        unidades = unidadesBrutas.split(';').map(function(valor) {
+          return valor.toString().trim();
+        }).filter(function(valor) { return valor; });
+      }
+
       usuarios.push({
         id: id,
         nome: obterValorLinha(linha, estrutura, 'nome', ''),
@@ -731,7 +751,9 @@ function getUsuarios() {
         acessoVisitantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso visitantes', false)),
         acessoAcompanhantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso acompanhantes', false)),
         dataCadastro: obterValorLinha(linha, estrutura, 'data cadastro', ''),
-        status: obterValorLinha(linha, estrutura, 'status', '')
+        status: obterValorLinha(linha, estrutura, 'status', ''),
+        senha: obterValorLinha(linha, estrutura, 'senha', ''),
+        unidades: unidades
       });
     });
 
@@ -748,9 +770,26 @@ function cadastrarUsuario(dados) {
     var nome = (dados.nome || '').toString().trim();
     var email = (dados.email || '').toString().trim();
     var perfil = (dados.perfil || '').toString().trim().toLowerCase();
+    var senha = (dados.senha || '').toString().trim();
+    var unidadesParametro = dados.unidades !== undefined ? dados.unidades : '';
+    var unidadesTexto = Array.isArray(unidadesParametro)
+      ? unidadesParametro.join(';')
+      : (unidadesParametro || '').toString().trim();
 
     if (!nome || !email || !perfil) {
-      return { success: false, error: 'Nome, email e perfil são obrigatórios' };
+      return { success: false, error: 'Nome, matrícula e perfil são obrigatórios' };
+    }
+
+    if (!senha) {
+      return { success: false, error: 'Informe uma senha para o usuário' };
+    }
+
+    if (!unidadesTexto) {
+      unidadesTexto = perfil === 'admin' ? 'all' : '';
+    }
+
+    if (!unidadesTexto && perfil !== 'admin') {
+      return { success: false, error: 'Informe ao menos uma unidade de acesso' };
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -761,7 +800,7 @@ function cadastrarUsuario(dados) {
     }
 
     var estrutura = obterEstruturaPlanilha(sheet);
-    var totalColunas = estrutura.ultimaColuna || 8;
+    var totalColunas = estrutura.ultimaColuna || 10;
     var ultimaLinha = sheet.getLastRow();
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
     var proximoId = 1;
@@ -795,6 +834,8 @@ function cadastrarUsuario(dados) {
     definirValorLinha(novaLinha, estrutura, 'acesso acompanhantes', acessoAcompanhantes);
     definirValorLinha(novaLinha, estrutura, 'data cadastro', dataCadastro);
     definirValorLinha(novaLinha, estrutura, 'status', 'ativo');
+    definirValorLinha(novaLinha, estrutura, 'senha', senha);
+    definirValorLinha(novaLinha, estrutura, 'unidades', unidadesTexto);
 
     sheet.getRange(ultimaLinha + 1, 1, 1, totalColunas).setValues([novaLinha]);
 
@@ -812,12 +853,225 @@ function cadastrarUsuario(dados) {
         acessoVisitantes: acessoVisitantes,
         acessoAcompanhantes: acessoAcompanhantes,
         dataCadastro: dataCadastro,
-        status: 'ativo'
+        status: 'ativo',
+        senha: senha,
+        unidades: unidadesTexto ? unidadesTexto.split(';').filter(function(valor) { return valor; }) : []
       }
     };
 
   } catch (error) {
     registrarLog('ERRO', `Erro ao cadastrar usuário: ${error.toString()}`);
+    return { success: false, error: error.toString() };
+  }
+}
+
+function atualizarUsuario(dados) {
+  try {
+    var id = parseInt(dados.id, 10);
+    if (!id) {
+      return { success: false, error: 'ID do usuário inválido' };
+    }
+
+    var nome = (dados.nome || '').toString().trim();
+    var email = (dados.email || '').toString().trim();
+    var perfil = (dados.perfil || '').toString().trim().toLowerCase();
+    var senha = (dados.senha || '').toString().trim();
+    var status = (dados.status || '').toString().trim().toLowerCase();
+    var acessoVisitantes = converterParaBoolean(dados.acessoVisitantes);
+    var acessoAcompanhantes = converterParaBoolean(dados.acessoAcompanhantes);
+    var unidadesParametro = dados.unidades !== undefined ? dados.unidades : '';
+    var unidadesTexto = Array.isArray(unidadesParametro)
+      ? unidadesParametro.join(';')
+      : (unidadesParametro || '').toString().trim();
+
+    if (!nome || !email || !perfil) {
+      return { success: false, error: 'Nome, matrícula e perfil são obrigatórios' };
+    }
+
+    if (!senha) {
+      return { success: false, error: 'Informe a senha do usuário' };
+    }
+
+    if (!unidadesTexto) {
+      unidadesTexto = perfil === 'admin' ? 'all' : '';
+    }
+
+    if (!unidadesTexto && perfil !== 'admin') {
+      return { success: false, error: 'Informe ao menos uma unidade de acesso' };
+    }
+
+    if (!status || ['ativo', 'inativo'].indexOf(status) === -1) {
+      status = 'ativo';
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Usuários');
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: false, error: 'Usuário não encontrado' };
+    }
+
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || 10;
+    var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+    var ultimaLinha = sheet.getLastRow();
+    var faixa = sheet.getRange(2, 1, ultimaLinha - 1, totalColunas);
+    var valores = faixa.getValues();
+    var encontrado = false;
+
+    for (var i = 0; i < valores.length; i++) {
+      var valorId = valores[i][idIndex];
+      if (parseInt(valorId, 10) === id) {
+        definirValorLinha(valores[i], estrutura, 'nome', nome);
+        definirValorLinha(valores[i], estrutura, 'email', email);
+        definirValorLinha(valores[i], estrutura, 'perfil', perfil);
+        definirValorLinha(valores[i], estrutura, 'acesso visitantes', acessoVisitantes);
+        definirValorLinha(valores[i], estrutura, 'acesso acompanhantes', acessoAcompanhantes);
+        definirValorLinha(valores[i], estrutura, 'status', status);
+        definirValorLinha(valores[i], estrutura, 'senha', senha);
+        definirValorLinha(valores[i], estrutura, 'unidades', unidadesTexto);
+        encontrado = true;
+        break;
+      }
+    }
+
+    if (!encontrado) {
+      return { success: false, error: 'Usuário não encontrado' };
+    }
+
+    faixa.setValues(valores);
+
+    registrarLog('ATUALIZAR USUARIO', 'Usuário ' + nome + ' atualizado');
+
+    return {
+      success: true,
+      message: 'Usuário atualizado com sucesso',
+      usuario: {
+        id: id,
+        nome: nome,
+        email: email,
+        perfil: perfil,
+        acessoVisitantes: acessoVisitantes,
+        acessoAcompanhantes: acessoAcompanhantes,
+        status: status,
+        senha: senha,
+        unidades: unidadesTexto ? unidadesTexto.split(';').filter(function(valor) { return valor; }) : []
+      }
+    };
+
+  } catch (error) {
+    registrarLog('ERRO', 'Erro ao atualizar usuário: ' + error.toString());
+    return { success: false, error: error.toString() };
+  }
+}
+
+function excluirUsuario(dados) {
+  try {
+    var id = parseInt(dados.id, 10);
+    if (!id) {
+      return { success: false, error: 'ID inválido' };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Usuários');
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: false, error: 'Usuário não encontrado' };
+    }
+
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || 10;
+    var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+    var ultimaLinha = sheet.getLastRow();
+    var valores = sheet.getRange(2, 1, ultimaLinha - 1, totalColunas).getValues();
+    var linhaExcluir = -1;
+    var nomeUsuario = '';
+
+    for (var i = 0; i < valores.length; i++) {
+      var valorId = valores[i][idIndex];
+      if (parseInt(valorId, 10) === id) {
+        linhaExcluir = i + 2;
+        nomeUsuario = obterValorLinha(valores[i], estrutura, 'nome', '');
+        break;
+      }
+    }
+
+    if (linhaExcluir === -1) {
+      return { success: false, error: 'Usuário não encontrado' };
+    }
+
+    sheet.deleteRow(linhaExcluir);
+    registrarLog('EXCLUIR USUARIO', 'Usuário ' + nomeUsuario + ' removido');
+
+    return { success: true };
+
+  } catch (error) {
+    registrarLog('ERRO', 'Erro ao excluir usuário: ' + error.toString());
+    return { success: false, error: error.toString() };
+  }
+}
+
+function autenticarUsuario(dados) {
+  try {
+    var login = (dados.matricula || dados.email || dados.login || '').toString().trim();
+    var senhaInformada = (dados.senha || '').toString().trim();
+
+    if (!login || !senhaInformada) {
+      return { success: false, error: 'Informe matrícula e senha' };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Usuários');
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: false, error: 'Nenhum usuário cadastrado' };
+    }
+
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || 10;
+    var dadosUsuarios = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
+    var alvoNormalizado = normalizarTextoBasico(login);
+    var usuarioEncontrado = null;
+
+    dadosUsuarios.some(function(linha) {
+      var email = obterValorLinha(linha, estrutura, 'email', '');
+      var status = obterValorLinha(linha, estrutura, 'status', '');
+      if (normalizarTextoBasico(email) === alvoNormalizado && normalizarTextoBasico(status) === 'ativo') {
+        var senhaArmazenada = obterValorLinha(linha, estrutura, 'senha', '');
+        if (senhaInformada === senhaArmazenada) {
+          var unidadesTexto = obterValorLinha(linha, estrutura, 'unidades', '');
+          var unidadesLista = [];
+          if (typeof unidadesTexto === 'string' && unidadesTexto.trim()) {
+            unidadesLista = unidadesTexto.split(';').map(function(item) {
+              return item.toString().trim();
+            }).filter(function(item) { return item; });
+          }
+          usuarioEncontrado = {
+            id: obterValorLinha(linha, estrutura, 'id', ''),
+            nome: obterValorLinha(linha, estrutura, 'nome', ''),
+            email: email,
+            perfil: obterValorLinha(linha, estrutura, 'perfil', ''),
+            acessoVisitantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso visitantes', false)),
+            acessoAcompanhantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso acompanhantes', false)),
+            unidades: unidadesLista,
+            status: status
+          };
+        }
+        return true;
+      }
+      return false;
+    });
+
+    if (!usuarioEncontrado) {
+      return { success: false, error: 'Credenciais inválidas ou usuário inativo' };
+    }
+
+    registrarLog('LOGIN', 'Usuário ' + usuarioEncontrado.nome + ' autenticado');
+
+    return {
+      success: true,
+      usuario: usuarioEncontrado
+    };
+
+  } catch (error) {
+    registrarLog('ERRO', 'Erro ao autenticar usuário: ' + error.toString());
     return { success: false, error: error.toString() };
   }
 }
