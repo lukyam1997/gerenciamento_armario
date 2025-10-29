@@ -754,7 +754,8 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
           pdfUrl: termoRelacionado.pdfUrl || '',
           responsavel: termoRelacionado.acompanhante,
           metodoFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.metodoFinal : '',
-          cpfFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.cpfFinal : ''
+          cpfFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.cpfFinal : '',
+          status: termoRelacionado.status || ''
         };
       } else {
         armario.termoAplicado = false;
@@ -1823,11 +1824,24 @@ function salvarTermoCompleto(dadosTermo) {
     }
 
     var valorAtualAssinatura = '';
+    var statusTermo = 'Em andamento';
     if (linhaExistente <= dadosExistentes.length && linhaExistente - 1 >= 0) {
       var linhaAtual = dadosExistentes[linhaExistente - 1];
-      if (linhaAtual && linhaAtual.length > 18) {
-        valorAtualAssinatura = linhaAtual[18];
+      if (linhaAtual) {
+        if (linhaAtual.length > 18) {
+          valorAtualAssinatura = linhaAtual[18];
+        }
+        if (linhaAtual.length > 19) {
+          var statusExistente = linhaAtual[19];
+          if (statusExistente && statusExistente.toString().trim()) {
+            statusTermo = statusExistente;
+          }
+        }
       }
+    }
+
+    if (normalizarTextoBasico(statusTermo) !== 'finalizado') {
+      statusTermo = 'Em andamento';
     }
 
     var assinaturasInfo = normalizarAssinaturas(valorAtualAssinatura);
@@ -1852,7 +1866,8 @@ function salvarTermoCompleto(dadosTermo) {
       descricaoVolumes,
       aplicadoEm,
       '',
-      JSON.stringify(assinaturasInfo)
+      JSON.stringify(assinaturasInfo),
+      statusTermo
     ];
 
     sheet.getRange(linhaExistente, 1, 1, linhaDados.length).setValues([linhaDados]);
@@ -1986,7 +2001,8 @@ function obterTermosRegistrados() {
       descricaoVolumes: data[i][15],
       aplicadoEm: data[i][16],
       pdfUrl: data[i][17],
-      assinaturas: assinaturas
+      assinaturas: assinaturas,
+      status: data[i][19] || ''
     });
   }
 
@@ -2047,7 +2063,8 @@ function getTermo(dados) {
           assinaturas: assinaturas,
           finalizadoEm: assinaturas.finalizadoEm,
           metodoFinal: assinaturas.metodoFinal,
-          cpfConfirmacao: assinaturas.cpfFinal
+          cpfConfirmacao: assinaturas.cpfFinal,
+          status: data[i][19] || ''
         };
         break;
       }
@@ -2150,6 +2167,9 @@ function finalizarTermo(dados) {
 
     termosInfo.sheet.getRange(termoEncontrado.linha, 18).setValue(resultadoPDF.pdfUrl);
     termosInfo.sheet.getRange(termoEncontrado.linha, 19).setValue(JSON.stringify(assinaturas));
+    termosInfo.sheet.getRange(termoEncontrado.linha, 20).setValue('Finalizado');
+
+    termoEncontrado.status = 'Finalizado';
 
     limparCacheTermos();
 
