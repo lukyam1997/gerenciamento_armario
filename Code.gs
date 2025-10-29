@@ -72,6 +72,44 @@ function definirValorLinha(linha, estrutura, chave, valor) {
   linha[indice] = valor;
 }
 
+function obterValorLinhaFlexivel(linha, estrutura, chaves, padrao) {
+  if (!Array.isArray(chaves)) {
+    chaves = [chaves];
+  }
+
+  for (var i = 0; i < chaves.length; i++) {
+    var indice = obterIndiceColuna(estrutura, chaves[i], null);
+    if (indice !== null && indice !== undefined && indice < linha.length) {
+      return linha[indice];
+    }
+  }
+
+  return padrao;
+}
+
+function definirValorLinhaFlexivel(linha, estrutura, chaves, valor) {
+  if (!Array.isArray(chaves)) {
+    chaves = [chaves];
+  }
+
+  for (var i = 0; i < chaves.length; i++) {
+    var indice = obterIndiceColuna(estrutura, chaves[i], null);
+    if (indice === null || indice === undefined) {
+      continue;
+    }
+
+    var tamanhoMinimo = Math.max(estrutura.ultimaColuna, indice + 1);
+    while (linha.length < tamanhoMinimo) {
+      linha.push('');
+    }
+
+    linha[indice] = valor;
+    return true;
+  }
+
+  return false;
+}
+
 function converterParaBoolean(valor) {
   if (valor === true || valor === false) {
     return valor;
@@ -971,7 +1009,7 @@ function getUsuarios() {
 
       var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
       var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
-      var unidadesBrutas = obterValorLinha(linha, estrutura, 'unidades', '');
+      var unidadesBrutas = obterValorLinhaFlexivel(linha, estrutura, ['unidades', 'unidade', 'acesso unidades'], '');
       var unidades = resolverIdsUnidadesArmazenadas(unidadesBrutas, mapasUnidades);
       var unidadesUnicas = [];
       unidades.forEach(function(unidade) {
@@ -1089,7 +1127,9 @@ function cadastrarUsuario(dados) {
     definirValorLinha(novaLinha, estrutura, 'data cadastro', dataCadastro);
     definirValorLinha(novaLinha, estrutura, 'status', 'ativo');
     definirValorLinha(novaLinha, estrutura, 'senha', senha);
-    definirValorLinha(novaLinha, estrutura, 'unidades', unidadesTexto);
+    if (!definirValorLinhaFlexivel(novaLinha, estrutura, ['unidades', 'unidade', 'acesso unidades'], unidadesTexto)) {
+      definirValorLinha(novaLinha, estrutura, 'unidades', unidadesTexto);
+    }
 
     sheet.getRange(ultimaLinha + 1, 1, 1, totalColunas).setValues([novaLinha]);
 
@@ -1199,7 +1239,9 @@ function atualizarUsuario(dados) {
         definirValorLinha(valores[i], estrutura, 'acesso acompanhantes', acessoAcompanhantes);
         definirValorLinha(valores[i], estrutura, 'status', status);
         definirValorLinha(valores[i], estrutura, 'senha', senha);
-        definirValorLinha(valores[i], estrutura, 'unidades', unidadesTexto);
+        if (!definirValorLinhaFlexivel(valores[i], estrutura, ['unidades', 'unidade', 'acesso unidades'], unidadesTexto)) {
+          definirValorLinha(valores[i], estrutura, 'unidades', unidadesTexto);
+        }
         encontrado = true;
         break;
       }
@@ -1342,7 +1384,7 @@ function autenticarUsuario(dados) {
       return { success: false, error: 'Senha incorreta' };
     }
 
-    var unidadesTexto = obterValorLinha(linhaUsuario, estrutura, 'unidades', '');
+    var unidadesTexto = obterValorLinhaFlexivel(linhaUsuario, estrutura, ['unidades', 'unidade', 'acesso unidades'], '');
     var unidadesLista = resolverIdsUnidadesArmazenadas(unidadesTexto, mapasUnidades);
 
     var usuarioEncontrado = {

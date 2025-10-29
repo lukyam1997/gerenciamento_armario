@@ -2466,6 +2466,89 @@
             };
         }
         let estado = criarEstadoInicial();
+        const STORAGE_KEYS = {
+            sessaoUsuario: 'locknac_sessao_usuario'
+        };
+        const SESSAO_TTL_MS = 1000 * 60 * 60 * 8; // 8 horas
+        let armazenamentoLocalDisponivel;
+        function obterArmazenamentoLocal() {
+            if (armazenamentoLocalDisponivel !== undefined) {
+                return armazenamentoLocalDisponivel;
+            }
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    const chaveTeste = '__locknac_sessao_teste__';
+                    window.localStorage.setItem(chaveTeste, '1');
+                    window.localStorage.removeItem(chaveTeste);
+                    armazenamentoLocalDisponivel = window.localStorage;
+                    return armazenamentoLocalDisponivel;
+                }
+            } catch (erro) {
+                console.warn('Armazenamento local indisponível:', erro);
+            }
+            armazenamentoLocalDisponivel = null;
+            return armazenamentoLocalDisponivel;
+        }
+        function salvarSessaoUsuario(usuario) {
+            const storage = obterArmazenamentoLocal();
+            if (!storage) return;
+            try {
+                const dados = {
+                    usuario,
+                    atualizadoEm: Date.now()
+                };
+                storage.setItem(STORAGE_KEYS.sessaoUsuario, JSON.stringify(dados));
+            } catch (erro) {
+                console.warn('Não foi possível salvar a sessão do usuário:', erro);
+            }
+        }
+        function restaurarSessaoUsuario() {
+            const storage = obterArmazenamentoLocal();
+            if (!storage) return null;
+            try {
+                const dadosBrutos = storage.getItem(STORAGE_KEYS.sessaoUsuario);
+                if (!dadosBrutos) {
+                    return null;
+                }
+                const dados = JSON.parse(dadosBrutos);
+                if (!dados || !dados.usuario) {
+                    return null;
+                }
+                if (dados.atualizadoEm && (Date.now() - dados.atualizadoEm) > SESSAO_TTL_MS) {
+                    storage.removeItem(STORAGE_KEYS.sessaoUsuario);
+                    return null;
+                }
+                return dados.usuario;
+            } catch (erro) {
+                console.warn('Falha ao restaurar sessão do usuário:', erro);
+                try {
+                    storage.removeItem(STORAGE_KEYS.sessaoUsuario);
+                } catch (erroRemocao) {
+                    console.warn('Não foi possível limpar sessão inválida:', erroRemocao);
+                }
+                return null;
+            }
+        }
+        function limparSessaoUsuario() {
+            const storage = obterArmazenamentoLocal();
+            if (!storage) return;
+            try {
+                storage.removeItem(STORAGE_KEYS.sessaoUsuario);
+            } catch (erro) {
+                console.warn('Não foi possível limpar a sessão do usuário:', erro);
+            }
+        }
+        function persistirSessaoAtual() {
+            if (estado.autenticado && estado.usuarioAutenticado) {
+                const usuarioAtual = {
+                    ...estado.usuarioAutenticado,
+                    unidades: normalizarListaDeUnidades(estado.usuarioAutenticado.unidades)
+                };
+                salvarSessaoUsuario(usuarioAtual);
+            } else {
+                limparSessaoUsuario();
+            }
+        }
         // Elementos DOM
         const elementos = {
             loginContainer: document.getElementById('login-container'),
@@ -3094,6 +3177,7 @@
                 atualizarCabecalhoUsuario();
                 aplicarPermissoesMenu();
                 carregarDadosTabelas();
+                persistirSessaoAtual();
                 return;
             }
             aplicacaoInicializada = true;
@@ -3104,6 +3188,7 @@
             atualizarCabecalhoUsuario();
             aplicarPermissoesMenu();
             carregarDadosTabelas();
+            persistirSessaoAtual();
         }
         function atualizarFeedbackLogin(tipo, mensagem = '') {
             if (!elementos.loginFeedback) {
@@ -3121,6 +3206,28 @@
                 return;
             }
             loginInicializado = true;
+            const sessaoRestaurada = restaurarSessaoUsuario();
+            if (sessaoRestaurada && !estado.autenticado) {
+                const usuarioRestaurado = {
+                    ...sessaoRestaurada
+                };
+                usuarioRestaurado.perfil = (usuarioRestaurado.perfil || 'usuario').toString().trim().toLowerCase();
+                usuarioRestaurado.unidades = normalizarListaDeUnidades(usuarioRestaurado.unidades);
+                estado.usuarioAutenticado = usuarioRestaurado;
+                estado.autenticado = true;
+                persistirSessaoAtual();
+                if (elementos.loginContainer) {
+                    elementos.loginContainer.classList.add('hidden');
+                }
+                if (elementos.appShell) {
+                    elementos.appShell.classList.remove('hidden');
+                }
+                atualizarCabecalhoUsuario();
+                aplicarPermissoesMenu();
+                inicializarAplicacao().catch(erro => {
+                    console.error('Erro ao inicializar aplicação após restaurar sessão:', erro);
+                });
+            }
             if (!elementos.loginForm) {
                 return;
             }
@@ -3146,6 +3253,7 @@
                     usuarioAutenticado.unidades = normalizarListaDeUnidades(usuarioAutenticado.unidades);
                     estado.usuarioAutenticado = usuarioAutenticado;
                     estado.autenticado = true;
+                    persistirSessaoAtual();
                     elementos.loginSenha.value = '';
                     atualizarFeedbackLogin('success', 'Login realizado com sucesso!');
                     if (elementos.loginContainer) {
@@ -3168,6 +3276,7 @@
         function realizarLogout() {
             estado = criarEstadoInicial();
             aplicacaoInicializada = false;
+            limparSessaoUsuario();
             atualizarFeedbackLogin();
             atualizarCabecalhoUsuario();
             if (elementos.loginUsuario) {
