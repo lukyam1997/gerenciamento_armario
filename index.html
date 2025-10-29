@@ -161,18 +161,48 @@
             font-weight: 600;
             color: var(--dark-color);
         }
-        .selector-group select {
-            padding: 8px 12px;
-            border-radius: 6px;
+        .selector-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 10px;
             border: 1px solid var(--border-color);
-            background-color: var(--surface-color);
-            min-width: 160px;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: linear-gradient(135deg, var(--surface-color) 0%, color-mix(in srgb, var(--primary-color) 6%, white 94%) 100%);
+            min-width: 190px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
-        .selector-group select:focus {
+        .selector-control:hover {
+            border-color: color-mix(in srgb, var(--primary-color) 60%, white 40%);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+            transform: translateY(-1px);
+        }
+        .selector-control:focus-within {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 4px var(--focus-ring);
+        }
+        .selector-icon {
+            color: var(--primary-color);
+            font-size: 1rem;
+        }
+        .selector-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--dark-color);
+            appearance: none;
+            padding-right: 18px;
+        }
+        .selector-input:focus {
             outline: none;
+        }
+        .selector-arrow {
+            color: var(--muted-color);
+            font-size: 0.9rem;
+            pointer-events: none;
         }
         .notification-bell {
             position: relative;
@@ -1226,18 +1256,25 @@
                 <div class="header-selectors">
                     <div class="selector-group">
                         <label for="profile-select">Perfil</label>
-                        <select id="profile-select">
-                            <option value="visitante">Visitante</option>
-                            <option value="acompanhante">Acompanhante</option>
-                            <option value="ambos">Acomp/Visit</option>
-                            <option value="admin" selected>Administrador</option>
-                        </select>
+                        <div class="selector-control">
+                            <i class="fas fa-users selector-icon"></i>
+                            <select id="profile-select" class="selector-input">
+                                <option value="geral" selected>Perfil geral</option>
+                                <option value="visitante">Visitantes</option>
+                                <option value="acompanhante">Acompanhantes</option>
+                            </select>
+                            <span class="selector-arrow"><i class="fas fa-angle-down"></i></span>
+                        </div>
                     </div>
                     <div class="selector-group">
                         <label for="unit-select">Unidade</label>
-                        <select id="unit-select">
-                            <option value="todas">Todas as unidades</option>
-                        </select>
+                        <div class="selector-control">
+                            <i class="fas fa-building selector-icon"></i>
+                            <select id="unit-select" class="selector-input">
+                                <option value="todas">Todas as unidades</option>
+                            </select>
+                            <span class="selector-arrow"><i class="fas fa-angle-down"></i></span>
+                        </div>
                     </div>
                 </div>
                 <div class="notification-bell" id="notification-bell">
@@ -1248,7 +1285,7 @@
                     <div class="user-avatar">JS</div>
                     <div>
                         <div>João Silva</div>
-                        <div style="font-size: 0.8rem; color: #666;">Administrador</div>
+                        <div style="font-size: 0.8rem; color: #666;">Perfil geral</div>
                     </div>
                 </div>
             </div>
@@ -1964,11 +2001,12 @@
         const SCRIPT_URL = 'https://script.google.com/a/macros/isgh.org.br/s/AKfycbzbGb6sQR1auYsyTB-kwPos7Cd7swLuTUDiAzzpwTPW2cj76ykYzKYgBDXA-g5ef7pbpw/exec';
         // Estado da aplicação
         let estado = {
-            perfilAtual: 'admin',
+            perfilAtual: 'geral',
             unidadeAtual: 'todas',
             filtroAtual: 'todos',
             paginaAtual: 'dashboard',
             armarios: [],
+            armariosCarregados: false,
             cadastroArmarios: [],
             unidades: [],
             notificacoes: [],
@@ -2142,9 +2180,13 @@
                 mostrarErro('Erro ao carregar dados do sistema');
             }
         }
-        async function carregarArmarios() {
+        async function carregarArmarios({ forcarAtualizacao = false } = {}) {
+            if (!forcarAtualizacao && estado.armariosCarregados) {
+                return;
+            }
+
             const resultado = await callGoogleScript('getArmarios', {
-                tipo: estado.perfilAtual
+                tipo: 'todos'
             });
 
             if (resultado.success) {
@@ -2152,6 +2194,10 @@
                     ...armario,
                     unidade: armario.unidade ? armario.unidade.trim() : ''
                 }));
+                estado.armariosCarregados = true;
+                atualizarResumoDashboardLocal();
+            } else {
+                estado.armariosCarregados = false;
             }
         }
         async function carregarUnidades() {
@@ -2171,17 +2217,7 @@
             }
         }
         async function carregarEstatisticas() {
-            const resultado = await callGoogleScript('getEstatisticasDashboard', {
-                tipoUsuario: estado.perfilAtual
-            });
-           
-            if (resultado.success) {
-                const stats = resultado.data;
-                elementos.cardsCount.livres.textContent = stats.livres;
-                elementos.cardsCount.emUso.textContent = stats.emUso;
-                elementos.cardsCount.proximo.textContent = stats.proximo;
-                elementos.cardsCount.vencidos.textContent = stats.vencidos;
-            }
+            atualizarResumoDashboardLocal();
         }
         async function carregarNotificacoes() {
             const resultado = await callGoogleScript('getNotificacoes');
@@ -2321,7 +2357,7 @@
                 elementos.profileSelect.addEventListener('change', async function() {
                     estado.perfilAtual = this.value;
                     await carregarArmarios();
-                    await carregarEstatisticas();
+                    atualizarResumoDashboardLocal();
                     atualizarInterface();
                     carregarDadosTabelas();
                 });
@@ -2330,7 +2366,7 @@
                 elementos.unitSelect.addEventListener('change', async function() {
                     estado.unidadeAtual = this.value;
                     await carregarArmarios();
-                    await carregarEstatisticas();
+                    atualizarResumoDashboardLocal();
                     atualizarInterface();
                     carregarDadosTabelas();
                 });
@@ -2521,11 +2557,11 @@
             elementos.armariosContainer.innerHTML = '';
             const perfil = estado.perfilAtual;
             const unidadeFiltro = estado.unidadeAtual;
+            const perfilNormalizado = normalizarTexto(perfil);
             const unidadeFiltroNormalizado = normalizarTexto(unidadeFiltro);
             let armariosParaExibir = estado.armarios.filter(a => {
-                const correspondePerfil = perfil === 'admin' || perfil === 'ambos' || a.tipo === perfil ||
-                    (perfil === 'visitante' && a.tipo === 'visitante') ||
-                    (perfil === 'acompanhante' && a.tipo === 'acompanhante');
+                const tipoNormalizado = normalizarTexto(a.tipo);
+                const correspondePerfil = perfilNormalizado === 'geral' || perfilNormalizado === 'todos' || tipoNormalizado === perfilNormalizado;
                 const correspondeUnidade = unidadeFiltroNormalizado === 'todas' ||
                     normalizarTexto(a.unidade) === unidadeFiltroNormalizado;
                 return correspondePerfil && correspondeUnidade;
@@ -2579,7 +2615,21 @@
                 vencidos: 0
             };
 
+            const perfilFiltro = normalizarTexto(estado.perfilAtual);
+            const unidadeFiltro = normalizarTexto(estado.unidadeAtual);
+
             estado.armarios.forEach(armario => {
+                const tipoNormalizado = normalizarTexto(armario.tipo);
+                const unidadeNormalizada = normalizarTexto(armario.unidade);
+
+                if (perfilFiltro !== 'geral' && perfilFiltro !== 'todos' && tipoNormalizado !== perfilFiltro) {
+                    return;
+                }
+
+                if (unidadeFiltro !== 'todas' && unidadeNormalizada !== unidadeFiltro) {
+                    return;
+                }
+
                 switch (armario.status) {
                     case 'livre':
                         totais.livres += 1;
@@ -2642,9 +2692,15 @@
                 precisaAtualizar = true;
             }
 
-            if (armario.tipo === 'acompanhante' && !armario.termoFinalizado) {
-                atualizacoes.termoFinalizado = true;
-                precisaAtualizar = true;
+            if (armario.tipo === 'acompanhante') {
+                if (!armario.termoFinalizado) {
+                    atualizacoes.termoFinalizado = true;
+                    precisaAtualizar = true;
+                }
+                if (armario.termoAplicado) {
+                    atualizacoes.termoAplicado = false;
+                    precisaAtualizar = true;
+                }
             }
 
             if (armario.tipo === 'acompanhante' && armario.termoInfo) {
@@ -2720,15 +2776,11 @@
         async function carregarTabelaVisitantes(unidadeFiltro) {
             const tbodyVisitantes = document.querySelector('#tabela-visitantes tbody');
             if (!tbodyVisitantes) return;
-            const resultado = await callGoogleScript('getArmarios', { tipo: 'visitante' });
-            if (!resultado.success) return;
+            await carregarArmarios();
             tbodyVisitantes.innerHTML = '';
             const filtroNormalizado = normalizarTexto(unidadeFiltro);
-            resultado.data
-                .map(armario => ({
-                    ...armario,
-                    unidade: armario.unidade ? armario.unidade.trim() : ''
-                }))
+            estado.armarios
+                .filter(armario => normalizarTexto(armario.tipo) === 'visitante')
                 .filter(a => filtroNormalizado === 'todas' || normalizarTexto(a.unidade) === filtroNormalizado)
                 .forEach(armario => {
                     const tr = document.createElement('tr');
@@ -2756,15 +2808,11 @@
         async function carregarTabelaAcompanhantes(unidadeFiltro) {
             const tbodyAcompanhantes = document.querySelector('#tabela-acompanhantes tbody');
             if (!tbodyAcompanhantes) return;
-            const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
-            if (!resultado.success) return;
+            await carregarArmarios();
             tbodyAcompanhantes.innerHTML = '';
             const filtroNormalizado = normalizarTexto(unidadeFiltro);
-            resultado.data
-                .map(armario => ({
-                    ...armario,
-                    unidade: armario.unidade ? armario.unidade.trim() : ''
-                }))
+            estado.armarios
+                .filter(armario => normalizarTexto(armario.tipo) === 'acompanhante')
                 .filter(a => filtroNormalizado === 'todas' || normalizarTexto(a.unidade) === filtroNormalizado)
                 .forEach(armario => {
                     const tr = document.createElement('tr');
@@ -2843,15 +2891,16 @@
             const tbody = elementos.tabelaTermosBody;
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:#5b6b86;">Carregando termos...</td></tr>';
 
-            const resultado = await callGoogleScript('getArmarios', { tipo: 'acompanhante' });
+            await carregarArmarios();
             if (estado.carregamentoTermosId !== carregamentoId) return;
 
-            if (!resultado.success) {
+            if (!estado.armariosCarregados) {
                 tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:#c0392b;">Erro ao carregar termos.</td></tr>';
                 return;
             }
 
-            const armariosComTermo = resultado.data
+            const armariosComTermo = estado.armarios
+                .filter(a => normalizarTexto(a.tipo) === 'acompanhante')
                 .filter(a => a.status !== 'livre')
                 .sort((a, b) => {
                     const peso = (valor) => {
@@ -3228,12 +3277,15 @@
         // Abrir modal para novo armário
         async function abrirModalNovoArmario(tipo) {
             // Buscar armários livres do tipo especificado
-            const resultado = await callGoogleScript('getArmarios', { tipo });
-            if (!resultado.success) {
+            await carregarArmarios({ forcarAtualizacao: true });
+            if (!estado.armariosCarregados) {
                 mostrarErro('Erro ao buscar armários');
                 return;
             }
-            const armarioLivre = resultado.data.find(a => a.status === 'livre');
+            const tipoNormalizado = normalizarTexto(tipo);
+            const armarioLivre = estado.armarios
+                .filter(a => normalizarTexto(a.tipo) === tipoNormalizado)
+                .find(a => a.status === 'livre');
             if (armarioLivre) {
                 abrirModalArmario(armarioLivre);
             } else {
@@ -3354,7 +3406,7 @@
             const cadastroResultado = await callGoogleScript('cadastrarArmarioFisico', dados);
             if (cadastroResultado.success) {
                 // Recarregar dados
-                await carregarArmarios();
+                await carregarArmarios({ forcarAtualizacao: true });
                 await carregarEstatisticas();
                 atualizarInterface();
                 carregarDadosTabelas();
@@ -3409,7 +3461,7 @@
                     fecharModalArmario();
 
                     // Recarregar dados
-                    await carregarArmarios();
+                    await carregarArmarios({ forcarAtualizacao: true });
                     await carregarEstatisticas();
                     atualizarInterface();
                     carregarDadosTabelas();
@@ -3450,7 +3502,7 @@
         async function liberarArmario(id, tipo) {
             const resultado = await callGoogleScript('liberarArmario', { id, tipo });
             if (resultado.success) {
-                await carregarArmarios();
+                await carregarArmarios({ forcarAtualizacao: true });
                 await carregarEstatisticas();
                 garantirArmarioLiberadoLocal(id);
                 atualizarResumoDashboardLocal();
@@ -3850,7 +3902,7 @@
                 fecharTermoModal();
 
                 // Recarregar dados
-                await carregarArmarios();
+                await carregarArmarios({ forcarAtualizacao: true });
                 await carregarEstatisticas();
                 atualizarInterface();
                 carregarDadosTabelas();
@@ -4211,7 +4263,7 @@
                     fecharModalLiberacao();
 
                     // Recarregar dados
-                    await carregarArmarios();
+                    await carregarArmarios({ forcarAtualizacao: true });
                     await carregarEstatisticas();
                     garantirArmarioLiberadoLocal(armarioId, metodo, confirmacao);
                     atualizarResumoDashboardLocal();
