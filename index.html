@@ -493,6 +493,16 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            cursor: pointer;
+            border-radius: 999px;
+            padding: 6px 10px;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .user-profile:focus-visible,
+        .user-profile:hover {
+            background-color: color-mix(in srgb, var(--light-color) 78%, white 22%);
+            box-shadow: 0 0 0 3px var(--focus-ring);
+            outline: none;
         }
         .user-avatar {
             width: 40px;
@@ -504,6 +514,26 @@
             justify-content: center;
             color: white;
             font-weight: bold;
+            overflow: hidden;
+            position: relative;
+        }
+        .user-avatar.has-image {
+            background-color: transparent;
+            background-size: cover;
+            background-position: center;
+            color: transparent;
+        }
+        .user-avatar.has-image::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.12);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .user-profile:hover .user-avatar.has-image::after,
+        .user-profile:focus-visible .user-avatar.has-image::after {
+            opacity: 1;
         }
         .user-details {
             display: flex;
@@ -517,6 +547,156 @@
         .user-details span {
             font-size: 0.8rem;
             color: var(--muted-color);
+        }
+        .avatar-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.28);
+            z-index: 1200;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-end;
+            padding: 100px 40px 40px;
+        }
+        .avatar-modal {
+            width: min(320px, 100%);
+            background: var(--surface-color);
+            border-radius: 16px;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+        }
+        .avatar-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .avatar-modal-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .avatar-modal-close {
+            background: none;
+            border: none;
+            color: var(--muted-color);
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .avatar-modal-close:hover,
+        .avatar-modal-close:focus-visible {
+            background-color: color-mix(in srgb, var(--light-color) 70%, white 30%);
+            color: var(--primary-dark);
+            outline: none;
+        }
+        .avatar-modal-description {
+            font-size: 0.85rem;
+            color: var(--muted-color);
+            line-height: 1.4;
+        }
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+            gap: 12px;
+        }
+        .avatar-option {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            border: 2px solid transparent;
+            padding: 0;
+            overflow: hidden;
+            background: color-mix(in srgb, var(--light-color) 85%, white 15%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .avatar-option img,
+        .avatar-option span {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .avatar-option span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.6rem;
+            color: var(--dark-color);
+        }
+        .avatar-option:hover,
+        .avatar-option:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 18px rgba(15, 23, 42, 0.15);
+            outline: none;
+        }
+        .avatar-option.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+        }
+        .avatar-custom {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .avatar-custom label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .avatar-custom-control {
+            display: flex;
+            gap: 8px;
+        }
+        .avatar-custom-control input[type="url"] {
+            flex: 1;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            color: var(--text-color);
+            background-color: var(--surface-color);
+        }
+        .avatar-custom-control input[type="url"]:focus {
+            outline: 2px solid var(--focus-ring);
+            outline-offset: 1px;
+        }
+        .avatar-custom-control input[type="url"].invalid {
+            border-color: var(--danger-color);
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+        }
+        .avatar-apply-button {
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+        .avatar-apply-button:hover,
+        .avatar-apply-button:focus-visible {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            outline: none;
+        }
+        .avatar-modal.hidden,
+        .avatar-modal-backdrop.hidden {
+            display: none;
         }
         .login-wrapper {
             position: fixed;
@@ -1707,7 +1887,7 @@
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge">0</span>
                 </div>
-                <div class="user-profile" id="header-user-profile">
+                <div class="user-profile" id="header-user-profile" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="avatar-modal" aria-expanded="false">
                     <div class="user-avatar" id="header-user-avatar">--</div>
                     <div class="user-details">
                         <strong id="header-user-name">Usuário</strong>
@@ -2441,6 +2621,25 @@
         </div>
     </div>
     </div>
+    <div class="avatar-modal-backdrop hidden" id="avatar-modal-backdrop" aria-hidden="true">
+        <div class="avatar-modal hidden" id="avatar-modal" role="dialog" aria-modal="true" aria-labelledby="avatar-modal-title">
+            <div class="avatar-modal-header">
+                <h3 class="avatar-modal-title" id="avatar-modal-title">Escolher avatar</h3>
+                <button type="button" class="avatar-modal-close" id="avatar-modal-close" aria-label="Fechar seleção de avatar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <p class="avatar-modal-description">Selecione uma imagem abaixo ou informe a URL de uma foto para personalizar seu perfil.</p>
+            <div class="avatar-grid" id="avatar-options" role="listbox" aria-label="Avatares sugeridos"></div>
+            <div class="avatar-custom">
+                <label for="avatar-url">Usar URL personalizada</label>
+                <div class="avatar-custom-control">
+                    <input type="url" id="avatar-url" name="avatar-url" placeholder="https://exemplo.com/minha-foto.jpg" autocomplete="off">
+                    <button type="button" class="avatar-apply-button" id="avatar-url-apply">Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         // URL do Google Apps Script - ATUALIZE COM SUA URL
         const SCRIPT_URL = 'https://script.google.com/a/macros/isgh.org.br/s/AKfycbzbGb6sQR1auYsyTB-kwPos7Cd7swLuTUDiAzzpwTPW2cj76ykYzKYgBDXA-g5ef7pbpw/exec';
@@ -2470,6 +2669,40 @@
             sessaoUsuario: 'locknac_sessao_usuario'
         };
         const SESSAO_TTL_MS = 1000 * 60 * 60 * 8; // 8 horas
+        const AVATAR_OPTIONS = [
+            {
+                id: 'avatar-none',
+                label: 'Sem imagem',
+                initials: '🙂',
+                background: 'linear-gradient(135deg, #e5e7eb, #f9fafb)',
+                textColor: '#1f2937'
+            },
+            {
+                id: 'avatar-royal',
+                label: 'Clássico',
+                url: 'https://i.pravatar.cc/150?img=12'
+            },
+            {
+                id: 'avatar-creative',
+                label: 'Criativo',
+                url: 'https://i.pravatar.cc/150?img=32'
+            },
+            {
+                id: 'avatar-adventurer',
+                label: 'Aventureiro',
+                url: 'https://i.pravatar.cc/150?img=47'
+            },
+            {
+                id: 'avatar-visionary',
+                label: 'Visionário',
+                url: 'https://i.pravatar.cc/150?img=59'
+            },
+            {
+                id: 'avatar-executive',
+                label: 'Executivo',
+                url: 'https://i.pravatar.cc/150?img=23'
+            }
+        ];
         let armazenamentoLocalDisponivel;
         function obterArmazenamentoLocal() {
             if (armazenamentoLocalDisponivel !== undefined) {
@@ -2549,6 +2782,136 @@
                 limparSessaoUsuario();
             }
         }
+        function popularAvataresPadrao() {
+            if (!elementos.avatarOptions) {
+                return;
+            }
+            elementos.avatarOptions.innerHTML = '';
+            AVATAR_OPTIONS.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'avatar-option';
+                button.dataset.avatarId = option.id;
+                button.dataset.avatarUrl = option.url ? option.url.toString() : '';
+                button.setAttribute('aria-label', option.label);
+                button.setAttribute('role', 'option');
+                button.setAttribute('aria-selected', 'false');
+                if (option.url) {
+                    const img = document.createElement('img');
+                    img.src = option.url;
+                    img.alt = option.label;
+                    img.loading = 'lazy';
+                    button.appendChild(img);
+                } else {
+                    const span = document.createElement('span');
+                    span.textContent = option.initials || '';
+                    if (option.background) {
+                        span.style.background = option.background;
+                    }
+                    if (option.textColor) {
+                        span.style.color = option.textColor;
+                    }
+                    button.appendChild(span);
+                }
+                elementos.avatarOptions.appendChild(button);
+            });
+        }
+        function obterAvatarAtualUrl() {
+            const usuario = obterUsuarioAutenticado();
+            return usuario && usuario.avatarUrl ? usuario.avatarUrl.toString().trim() : '';
+        }
+        function sincronizarSelecaoAvatar() {
+            if (!elementos.avatarOptions) {
+                return;
+            }
+            const atual = obterAvatarAtualUrl();
+            const botoes = elementos.avatarOptions.querySelectorAll('.avatar-option');
+            botoes.forEach(botao => {
+                const valor = botao.dataset.avatarUrl || '';
+                const selecionado = valor ? valor === atual : !atual;
+                botao.classList.toggle('selected', selecionado);
+                botao.setAttribute('aria-selected', selecionado ? 'true' : 'false');
+            });
+        }
+        function avatarModalAberto() {
+            return elementos.avatarModal && !elementos.avatarModal.classList.contains('hidden');
+        }
+        function abrirModalAvatar() {
+            if (!elementos.avatarModal || !elementos.avatarModalBackdrop) {
+                return;
+            }
+            elementos.avatarModalBackdrop.classList.remove('hidden');
+            elementos.avatarModal.classList.remove('hidden');
+            elementos.avatarModalBackdrop.setAttribute('aria-hidden', 'false');
+            if (elementos.headerUserProfile) {
+                elementos.headerUserProfile.setAttribute('aria-expanded', 'true');
+            }
+            sincronizarSelecaoAvatar();
+            requestAnimationFrame(() => {
+                const selecionado = elementos.avatarOptions?.querySelector('.avatar-option.selected');
+                const alvo = selecionado || elementos.avatarOptions?.querySelector('.avatar-option');
+                alvo?.focus();
+            });
+        }
+        function fecharModalAvatar({ focusTrigger = true } = {}) {
+            if (!elementos.avatarModal || !elementos.avatarModalBackdrop) {
+                return;
+            }
+            elementos.avatarModal.classList.add('hidden');
+            elementos.avatarModalBackdrop.classList.add('hidden');
+            elementos.avatarModalBackdrop.setAttribute('aria-hidden', 'true');
+            if (elementos.headerUserProfile) {
+                elementos.headerUserProfile.setAttribute('aria-expanded', 'false');
+                if (focusTrigger) {
+                    elementos.headerUserProfile.focus();
+                }
+            }
+            if (elementos.avatarUrlInput) {
+                elementos.avatarUrlInput.value = '';
+                elementos.avatarUrlInput.classList.remove('invalid');
+                elementos.avatarUrlInput.removeAttribute('aria-invalid');
+            }
+        }
+        function aplicarAvatarUsuario(url) {
+            if (!estado.autenticado || !estado.usuarioAutenticado) {
+                fecharModalAvatar({ focusTrigger: false });
+                return;
+            }
+            const normalizado = (url || '').toString().trim();
+            if (normalizado) {
+                estado.usuarioAutenticado.avatarUrl = normalizado;
+            } else if (estado.usuarioAutenticado.avatarUrl) {
+                delete estado.usuarioAutenticado.avatarUrl;
+            }
+            atualizarCabecalhoUsuario();
+            persistirSessaoAtual();
+            sincronizarSelecaoAvatar();
+            fecharModalAvatar();
+        }
+        function aplicarAvatarPersonalizado() {
+            if (!elementos.avatarUrlInput) {
+                return;
+            }
+            const valor = elementos.avatarUrlInput.value.trim();
+            if (!valor) {
+                elementos.avatarUrlInput.classList.add('invalid');
+                elementos.avatarUrlInput.setAttribute('aria-invalid', 'true');
+                elementos.avatarUrlInput.focus();
+                return;
+            }
+            try {
+                const urlValida = new URL(valor);
+                elementos.avatarUrlInput.classList.remove('invalid');
+                elementos.avatarUrlInput.removeAttribute('aria-invalid');
+                const urlFinal = urlValida.toString();
+                elementos.avatarUrlInput.value = '';
+                aplicarAvatarUsuario(urlFinal);
+            } catch (erro) {
+                elementos.avatarUrlInput.classList.add('invalid');
+                elementos.avatarUrlInput.setAttribute('aria-invalid', 'true');
+                elementos.avatarUrlInput.focus();
+            }
+        }
         // Elementos DOM
         const elementos = {
             loginContainer: document.getElementById('login-container'),
@@ -2589,9 +2952,16 @@
             },
             pages: document.querySelectorAll('.page'),
             menuLinks: document.querySelectorAll('.sidebar-menu a[data-page]'),
+            headerUserProfile: document.getElementById('header-user-profile'),
             headerUserAvatar: document.getElementById('header-user-avatar'),
             headerUserName: document.getElementById('header-user-name'),
             headerUserRole: document.getElementById('header-user-role'),
+            avatarModal: document.getElementById('avatar-modal'),
+            avatarModalBackdrop: document.getElementById('avatar-modal-backdrop'),
+            avatarModalClose: document.getElementById('avatar-modal-close'),
+            avatarOptions: document.getElementById('avatar-options'),
+            avatarUrlInput: document.getElementById('avatar-url'),
+            avatarUrlApply: document.getElementById('avatar-url-apply'),
             termoModal: document.getElementById('termo-modal'),
             termoForm: document.getElementById('termo-form'),
             termoModalClose: document.getElementById('termo-modal-close'),
@@ -2640,6 +3010,8 @@
             tabelaUsuariosBody: document.querySelector('#tabela-usuarios tbody'),
             logoutButton: document.getElementById('logout-button')
         };
+        popularAvataresPadrao();
+        sincronizarSelecaoAvatar();
         const customSelectorInstances = new WeakMap();
         const customSelectorStore = new Set();
         const paginasRestritasUsuario = new Set(['cadastro-armarios', 'cadastro-unidades', 'usuarios', 'logs']);
@@ -3043,12 +3415,24 @@
                 elementos.headerUserName.textContent = 'Usuário';
                 elementos.headerUserRole.textContent = '';
                 elementos.headerUserAvatar.textContent = '--';
+                elementos.headerUserAvatar.style.backgroundImage = '';
+                elementos.headerUserAvatar.classList.remove('has-image');
                 return;
             }
             const nomeLimpo = (usuario.nome || 'Usuário').toString().trim();
             elementos.headerUserName.textContent = nomeLimpo;
             elementos.headerUserRole.textContent = perfilAtualEhAdmin() ? 'Administrador' : 'Usuário';
-            elementos.headerUserAvatar.textContent = gerarIniciais(nomeLimpo);
+            const avatarUrl = usuario.avatarUrl ? usuario.avatarUrl.toString().trim() : '';
+            if (avatarUrl) {
+                elementos.headerUserAvatar.style.backgroundImage = `url("${avatarUrl.replace(/"/g, '\\"')}")`;
+                elementos.headerUserAvatar.classList.add('has-image');
+                elementos.headerUserAvatar.textContent = '';
+            } else {
+                elementos.headerUserAvatar.style.backgroundImage = '';
+                elementos.headerUserAvatar.classList.remove('has-image');
+                elementos.headerUserAvatar.textContent = gerarIniciais(nomeLimpo);
+            }
+            sincronizarSelecaoAvatar();
         }
         function aplicarPermissoesMenu() {
             if (!elementos.menuLinks) return;
@@ -3342,6 +3726,7 @@
             fecharTermoModal();
             fecharMovimentacaoModal();
             fecharModalLiberacao();
+            fecharModalAvatar({ focusTrigger: false });
         }
         async function carregarDadosIniciais() {
             if (!estado.autenticado) {
@@ -3591,6 +3976,67 @@
                         elementos.notificationPanel.style.display === 'block' ? 'none' : 'block';
                 });
             }
+            if (elementos.headerUserProfile) {
+                elementos.headerUserProfile.addEventListener('click', () => {
+                    if (avatarModalAberto()) {
+                        fecharModalAvatar({ focusTrigger: false });
+                    } else {
+                        abrirModalAvatar();
+                    }
+                });
+                elementos.headerUserProfile.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        abrirModalAvatar();
+                    }
+                });
+            }
+            if (elementos.avatarModalClose) {
+                elementos.avatarModalClose.addEventListener('click', () => fecharModalAvatar());
+            }
+            if (elementos.avatarModalBackdrop) {
+                elementos.avatarModalBackdrop.addEventListener('click', event => {
+                    if (event.target === elementos.avatarModalBackdrop) {
+                        fecharModalAvatar();
+                    }
+                });
+            }
+            if (elementos.avatarOptions) {
+                elementos.avatarOptions.addEventListener('click', event => {
+                    const botao = event.target.closest('.avatar-option');
+                    if (!botao) {
+                        return;
+                    }
+                    event.preventDefault();
+                    aplicarAvatarUsuario(botao.dataset.avatarUrl || '');
+                });
+                elementos.avatarOptions.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+                    const botao = event.target.closest('.avatar-option');
+                    if (!botao) {
+                        return;
+                    }
+                    event.preventDefault();
+                    aplicarAvatarUsuario(botao.dataset.avatarUrl || '');
+                });
+            }
+            if (elementos.avatarUrlApply) {
+                elementos.avatarUrlApply.addEventListener('click', aplicarAvatarPersonalizado);
+            }
+            if (elementos.avatarUrlInput) {
+                elementos.avatarUrlInput.addEventListener('keydown', event => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        aplicarAvatarPersonalizado();
+                    }
+                });
+                elementos.avatarUrlInput.addEventListener('input', () => {
+                    elementos.avatarUrlInput.classList.remove('invalid');
+                    elementos.avatarUrlInput.removeAttribute('aria-invalid');
+                });
+            }
             // Fechar modais
             elementos.modalClose.addEventListener('click', fecharModalArmario);
             elementos.usuarioModalClose.addEventListener('click', fecharModalUsuario);
@@ -3748,6 +4194,11 @@
                 if (!elementos.notificationBell.contains(e.target) &&
                     !elementos.notificationPanel.contains(e.target)) {
                     elementos.notificationPanel.style.display = 'none';
+                }
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && avatarModalAberto()) {
+                    fecharModalAvatar();
                 }
             });
         }
