@@ -89,6 +89,10 @@ function converterParaBoolean(valor) {
 // ID da pasta do Drive para salvar os PDFs - ATUALIZE COM SEU ID
 const PASTA_DRIVE_ID = '1nYsGJJUIufxDYVvIanVXCbPx7YuBOYDP';
 
+// Configuração de cache para leitura dos termos
+const TERMOS_CACHE_KEY = 'termos_registrados_cache_v1';
+const TERMOS_CACHE_TTL = 120; // segundos
+
 // Inicializar planilha com todas as abas e cabeçalhos
 function inicializarPlanilha() {
   try {
@@ -311,26 +315,48 @@ function handlePost(e) {
 // Funções para Armários
 function getArmarios(tipo) {
   try {
-    var incluirTermos = tipo === 'acompanhante' || tipo === 'admin' || tipo === 'ambos' || tipo === 'todos';
+    var tipoNormalizado = normalizarTextoBasico(tipo);
+    if (!tipoNormalizado) {
+      tipoNormalizado = 'geral';
+    }
+
+    var incluirTermos = tipoNormalizado === 'acompanhante' || tipoNormalizado === 'admin' ||
+      tipoNormalizado === 'ambos' || tipoNormalizado === 'todos' || tipoNormalizado === 'geral';
     var termosMap = {};
 
     if (incluirTermos) {
       var termosInfo = obterTermosRegistrados();
       termosInfo.termos.forEach(function(termo) {
-        if (!termosMap[termo.armarioId] || termosMap[termo.armarioId].id < termo.id) {
-          termosMap[termo.armarioId] = termo;
+        var chave = termo.armarioId;
+        if (!chave && chave !== 0) {
+          return;
+        }
+
+        var termoAtual = termosMap[chave];
+        var termoFinalizado = Boolean(termo.pdfUrl || (termo.assinaturas && termo.assinaturas.finalizadoEm));
+        if (!termoAtual) {
+          termosMap[chave] = termo;
+          return;
+        }
+
+        var atualFinalizado = Boolean(termoAtual.pdfUrl || (termoAtual.assinaturas && termoAtual.assinaturas.finalizadoEm));
+
+        if (!termoFinalizado && atualFinalizado) {
+          termosMap[chave] = termo;
+        } else if (termoFinalizado === atualFinalizado && termoAtual.id < termo.id) {
+          termosMap[chave] = termo;
         }
       });
     }
 
-    if (tipo === 'admin' || tipo === 'ambos') {
+    if (tipoNormalizado === 'admin' || tipoNormalizado === 'ambos' || tipoNormalizado === 'todos' || tipoNormalizado === 'geral') {
       var visitantes = getArmariosFromSheet('Visitantes', 'visitante', null);
       var acompanhantes = getArmariosFromSheet('Acompanhantes', 'acompanhante', termosMap);
       return { success: true, data: visitantes.concat(acompanhantes) };
     } else {
-      var sheetName = tipo === 'acompanhante' ? 'Acompanhantes' : 'Visitantes';
-      var mapa = tipo === 'acompanhante' ? termosMap : null;
-      return { success: true, data: getArmariosFromSheet(sheetName, tipo, mapa) };
+      var sheetName = tipoNormalizado === 'acompanhante' ? 'Acompanhantes' : 'Visitantes';
+      var mapa = tipoNormalizado === 'acompanhante' ? termosMap : null;
+      return { success: true, data: getArmariosFromSheet(sheetName, tipoNormalizado, mapa) };
     }
   } catch (error) {
     registrarLog('ERRO', `Erro ao buscar armários: ${error.toString()}`);
@@ -423,16 +449,17 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
     if (tipo === 'acompanhante') {
       var termoRelacionado = termosMap ? termosMap[armario.id] : null;
       if (termoRelacionado) {
-        armario.termoAplicado = true;
-        armario.termoFinalizado = Boolean(termoRelacionado.pdfUrl);
+        var termoFinalizado = Boolean(termoRelacionado.pdfUrl || (termoRelacionado.assinaturas && termoRelacionado.assinaturas.finalizadoEm));
+        armario.termoAplicado = !termoFinalizado;
+        armario.termoFinalizado = termoFinalizado;
         armario.termoInfo = {
           id: termoRelacionado.id,
           aplicadoEm: termoRelacionado.aplicadoEm,
-          finalizadoEm: termoRelacionado.assinaturas.finalizadoEm,
+          finalizadoEm: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.finalizadoEm : '',
           pdfUrl: termoRelacionado.pdfUrl || '',
           responsavel: termoRelacionado.acompanhante,
-          metodoFinal: termoRelacionado.assinaturas.metodoFinal,
-          cpfFinal: termoRelacionado.assinaturas.cpfFinal
+          metodoFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.metodoFinal : '',
+          cpfFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.cpfFinal : ''
         };
       } else {
         armario.termoAplicado = false;
@@ -1104,6 +1131,14 @@ function alternarStatusUnidade(dados) {
 }
 
 // Funções para Termos de Responsabilidade
+function limparCacheTermos() {
+  try {
+    CacheService.getScriptCache().remove(TERMOS_CACHE_KEY);
+  } catch (erroCache) {
+    registrarLog('AVISO_CACHE', 'Falha ao limpar cache de termos: ' + erroCache);
+  }
+}
+
 function salvarTermoCompleto(dadosTermo) {
   try {
     var orientacoes = dadosTermo.orientacoes;
@@ -1235,6 +1270,8 @@ function salvarTermoCompleto(dadosTermo) {
       }
     }
 
+    limparCacheTermos();
+
     registrarLog('TERMO_APLICADO', `Termo inicial registrado para armário ${dadosTermo.numeroArmario}`);
 
     return {
@@ -1296,6 +1333,19 @@ function obterTermosRegistrados() {
     return { sheet: sheet, termos: [] };
   }
 
+  var cache = CacheService.getScriptCache();
+  var dadosCache = null;
+  try {
+    dadosCache = cache.get(TERMOS_CACHE_KEY);
+    if (dadosCache) {
+      var termosCache = JSON.parse(dadosCache);
+      return { sheet: sheet, termos: termosCache };
+    }
+  } catch (erroCache) {
+    cache.remove(TERMOS_CACHE_KEY);
+    registrarLog('AVISO_CACHE', 'Falha ao ler cache de termos: ' + erroCache);
+  }
+
   var data = sheet.getDataRange().getValues();
   var termos = [];
 
@@ -1338,6 +1388,12 @@ function obterTermosRegistrados() {
       pdfUrl: data[i][17],
       assinaturas: assinaturas
     });
+  }
+
+  try {
+    cache.put(TERMOS_CACHE_KEY, JSON.stringify(termos), TERMOS_CACHE_TTL);
+  } catch (erroArmazenamento) {
+    registrarLog('AVISO_CACHE', 'Falha ao armazenar cache de termos: ' + erroArmazenamento);
   }
 
   return { sheet: sheet, termos: termos };
@@ -1494,6 +1550,8 @@ function finalizarTermo(dados) {
 
     termosInfo.sheet.getRange(termoEncontrado.linha, 18).setValue(resultadoPDF.pdfUrl);
     termosInfo.sheet.getRange(termoEncontrado.linha, 19).setValue(JSON.stringify(assinaturas));
+
+    limparCacheTermos();
 
     registrarLog('TERMO_FINALIZADO', 'Termo finalizado para armário ' + termoEncontrado.numeroArmario);
 
@@ -1942,20 +2000,25 @@ function getEstatisticasDashboard(tipoUsuario) {
       proximo: 0,
       vencidos: 0
     };
-    
+
     var tipos = [];
-    
+
     // Definir quais tipos de armário o usuário pode ver
-    if (tipoUsuario === 'admin' || tipoUsuario === 'ambos') {
+    var perfil = normalizarTextoBasico(tipoUsuario);
+    if (!perfil) {
+      perfil = 'geral';
+    }
+
+    if (perfil === 'admin' || perfil === 'ambos' || perfil === 'geral' || perfil === 'todos') {
       tipos = ['visitante', 'acompanhante'];
-    } else if (tipoUsuario === 'visitante') {
+    } else if (perfil === 'visitante') {
       tipos = ['visitante'];
-    } else if (tipoUsuario === 'acompanhante') {
+    } else if (perfil === 'acompanhante') {
       tipos = ['acompanhante'];
     }
-    
+
     var agora = new Date();
-    
+
     tipos.forEach(function(tipo) {
       var armarios = getArmarios(tipo);
       if (armarios.success) {
