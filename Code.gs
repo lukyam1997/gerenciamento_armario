@@ -86,6 +86,77 @@ function converterParaBoolean(valor) {
   return false;
 }
 
+function normalizarListaUnidadesParametro(valor) {
+  try {
+    if (valor === null || valor === undefined) {
+      return [];
+    }
+
+    if (Array.isArray(valor)) {
+      return valor.map(function(item) {
+        return item !== null && item !== undefined ? item.toString().trim() : '';
+      }).filter(function(item) {
+        return item;
+      });
+    }
+
+    if (typeof valor === 'string') {
+      var texto = valor.trim();
+      if (!texto) {
+        return [];
+      }
+
+      if ((texto.charAt(0) === '[' && texto.charAt(texto.length - 1) === ']') ||
+          (texto.charAt(0) === '{' && texto.charAt(texto.length - 1) === '}')) {
+        try {
+          var convertido = JSON.parse(texto);
+          if (Array.isArray(convertido)) {
+            return normalizarListaUnidadesParametro(convertido);
+          }
+        } catch (erroJSON) {
+          console.error('Falha ao interpretar unidades como JSON:', erroJSON);
+        }
+      }
+
+      if (texto.indexOf(';') !== -1 || texto.indexOf(',') !== -1) {
+        return texto.split(/[;,]/).map(function(item) {
+          return item.trim();
+        }).filter(function(item) {
+          return item;
+        });
+      }
+
+      return [texto];
+    }
+
+    if (typeof valor === 'number' || typeof valor === 'boolean') {
+      return [valor.toString()];
+    }
+
+    if (typeof valor === 'object') {
+      var itens = [];
+      for (var chave in valor) {
+        if (!valor.hasOwnProperty(chave)) {
+          continue;
+        }
+        var item = valor[chave];
+        if (Array.isArray(item)) {
+          itens = itens.concat(normalizarListaUnidadesParametro(item));
+        } else if (item !== null && item !== undefined) {
+          itens.push(item.toString().trim());
+        }
+      }
+      return itens.filter(function(item) {
+        return item;
+      });
+    }
+  } catch (erro) {
+    console.error('Erro ao normalizar unidades informadas:', erro);
+  }
+
+  return [];
+}
+
 // ID da pasta do Drive para salvar os PDFs - ATUALIZE COM SEU ID
 const PASTA_DRIVE_ID = '1nYsGJJUIufxDYVvIanVXCbPx7YuBOYDP';
 
@@ -734,14 +805,14 @@ function getUsuarios() {
 
       var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
       var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
-
       var unidadesBrutas = obterValorLinha(linha, estrutura, 'unidades', '');
-      var unidades = [];
-      if (typeof unidadesBrutas === 'string') {
-        unidades = unidadesBrutas.split(';').map(function(valor) {
-          return valor.toString().trim();
-        }).filter(function(valor) { return valor; });
-      }
+      var unidades = normalizarListaUnidadesParametro(unidadesBrutas);
+      var unidadesUnicas = [];
+      unidades.forEach(function(unidade) {
+        if (unidadesUnicas.indexOf(unidade) === -1) {
+          unidadesUnicas.push(unidade);
+        }
+      });
 
       usuarios.push({
         id: id,
@@ -753,7 +824,7 @@ function getUsuarios() {
         dataCadastro: obterValorLinha(linha, estrutura, 'data cadastro', ''),
         status: obterValorLinha(linha, estrutura, 'status', ''),
         senha: obterValorLinha(linha, estrutura, 'senha', ''),
-        unidades: unidades
+        unidades: unidadesUnicas
       });
     });
 
@@ -771,10 +842,27 @@ function cadastrarUsuario(dados) {
     var email = (dados.email || '').toString().trim();
     var perfil = (dados.perfil || '').toString().trim().toLowerCase();
     var senha = (dados.senha || '').toString().trim();
-    var unidadesParametro = dados.unidades !== undefined ? dados.unidades : '';
-    var unidadesTexto = Array.isArray(unidadesParametro)
-      ? unidadesParametro.join(';')
-      : (unidadesParametro || '').toString().trim();
+    var unidadesLista = normalizarListaUnidadesParametro(dados.unidades);
+    var unidadesUnicas = [];
+    var incluiTodas = false;
+
+    unidadesLista.forEach(function(unidade) {
+      var chave = unidade.toString().trim();
+      if (!chave) {
+        return;
+      }
+      if (normalizarTextoBasico(chave) === 'all') {
+        incluiTodas = true;
+        return;
+      }
+      if (unidadesUnicas.indexOf(chave) === -1) {
+        unidadesUnicas.push(chave);
+      }
+    });
+
+    if (incluiTodas || (perfil === 'admin' && unidadesUnicas.length === 0)) {
+      unidadesUnicas = ['all'];
+    }
 
     if (!nome || !email || !perfil) {
       return { success: false, error: 'Nome, matrícula e perfil são obrigatórios' };
@@ -784,13 +872,11 @@ function cadastrarUsuario(dados) {
       return { success: false, error: 'Informe uma senha para o usuário' };
     }
 
-    if (!unidadesTexto) {
-      unidadesTexto = perfil === 'admin' ? 'all' : '';
-    }
-
-    if (!unidadesTexto && perfil !== 'admin') {
+    if (unidadesUnicas.length === 0 && perfil !== 'admin') {
       return { success: false, error: 'Informe ao menos uma unidade de acesso' };
     }
+
+    var unidadesTexto = unidadesUnicas.join(';');
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Usuários');
@@ -855,7 +941,7 @@ function cadastrarUsuario(dados) {
         dataCadastro: dataCadastro,
         status: 'ativo',
         senha: senha,
-        unidades: unidadesTexto ? unidadesTexto.split(';').filter(function(valor) { return valor; }) : []
+        unidades: unidadesUnicas.slice()
       }
     };
 
@@ -879,10 +965,27 @@ function atualizarUsuario(dados) {
     var status = (dados.status || '').toString().trim().toLowerCase();
     var acessoVisitantes = converterParaBoolean(dados.acessoVisitantes);
     var acessoAcompanhantes = converterParaBoolean(dados.acessoAcompanhantes);
-    var unidadesParametro = dados.unidades !== undefined ? dados.unidades : '';
-    var unidadesTexto = Array.isArray(unidadesParametro)
-      ? unidadesParametro.join(';')
-      : (unidadesParametro || '').toString().trim();
+    var unidadesLista = normalizarListaUnidadesParametro(dados.unidades);
+    var unidadesUnicas = [];
+    var incluiTodas = false;
+
+    unidadesLista.forEach(function(unidade) {
+      var chave = unidade.toString().trim();
+      if (!chave) {
+        return;
+      }
+      if (normalizarTextoBasico(chave) === 'all') {
+        incluiTodas = true;
+        return;
+      }
+      if (unidadesUnicas.indexOf(chave) === -1) {
+        unidadesUnicas.push(chave);
+      }
+    });
+
+    if (incluiTodas || (perfil === 'admin' && unidadesUnicas.length === 0)) {
+      unidadesUnicas = ['all'];
+    }
 
     if (!nome || !email || !perfil) {
       return { success: false, error: 'Nome, matrícula e perfil são obrigatórios' };
@@ -892,13 +995,11 @@ function atualizarUsuario(dados) {
       return { success: false, error: 'Informe a senha do usuário' };
     }
 
-    if (!unidadesTexto) {
-      unidadesTexto = perfil === 'admin' ? 'all' : '';
-    }
-
-    if (!unidadesTexto && perfil !== 'admin') {
+    if (unidadesUnicas.length === 0 && perfil !== 'admin') {
       return { success: false, error: 'Informe ao menos uma unidade de acesso' };
     }
+
+    var unidadesTexto = unidadesUnicas.join(';');
 
     if (!status || ['ativo', 'inativo'].indexOf(status) === -1) {
       status = 'ativo';
@@ -954,7 +1055,7 @@ function atualizarUsuario(dados) {
         acessoAcompanhantes: acessoAcompanhantes,
         status: status,
         senha: senha,
-        unidades: unidadesTexto ? unidadesTexto.split(';').filter(function(valor) { return valor; }) : []
+        unidades: unidadesUnicas.slice()
       }
     };
 
@@ -1071,12 +1172,7 @@ function autenticarUsuario(dados) {
     }
 
     var unidadesTexto = obterValorLinha(linhaUsuario, estrutura, 'unidades', '');
-    var unidadesLista = [];
-    if (typeof unidadesTexto === 'string' && unidadesTexto.trim()) {
-      unidadesLista = unidadesTexto.split(';').map(function(item) {
-        return item.toString().trim();
-      }).filter(function(item) { return item; });
-    }
+    var unidadesLista = normalizarListaUnidadesParametro(unidadesTexto);
 
     var usuarioEncontrado = {
       id: obterValorLinha(linhaUsuario, estrutura, 'id', ''),

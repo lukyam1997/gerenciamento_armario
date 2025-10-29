@@ -2837,9 +2837,42 @@
         function normalizarListaDeUnidades(unidades) {
             if (!unidades) return [];
             if (Array.isArray(unidades)) {
-                return unidades.map(valor => (valor ?? '').toString().trim()).filter(valor => valor);
+                return unidades
+                    .map(valor => (valor ?? '').toString().trim())
+                    .filter(valor => valor);
             }
-            return unidades.toString().split(';').map(valor => valor.trim()).filter(valor => valor);
+            if (typeof unidades === 'string') {
+                const texto = unidades.toString().trim();
+                if (!texto) {
+                    return [];
+                }
+                if ((texto.startsWith('[') && texto.endsWith(']')) || (texto.startsWith('{') && texto.endsWith('}'))) {
+                    try {
+                        const convertido = JSON.parse(texto);
+                        return normalizarListaDeUnidades(convertido);
+                    } catch (erro) {
+                        console.warn('Falha ao interpretar unidades como JSON:', erro);
+                    }
+                }
+                const separador = texto.includes(';') || texto.includes(',') ? /[;,]/ : null;
+                if (separador) {
+                    return texto.split(separador).map(valor => valor.trim()).filter(valor => valor);
+                }
+                return [texto];
+            }
+            if (typeof unidades === 'object') {
+                const valores = [];
+                Object.keys(unidades).forEach(chave => {
+                    const valor = unidades[chave];
+                    if (Array.isArray(valor)) {
+                        valores.push(...valor);
+                    } else if (valor !== undefined && valor !== null) {
+                        valores.push(valor);
+                    }
+                });
+                return normalizarListaDeUnidades(valores);
+            }
+            return [(unidades ?? '').toString().trim()].filter(valor => valor);
         }
         function obterIdsPermitidos() {
             const usuario = obterUsuarioAutenticado();
@@ -2970,56 +3003,91 @@
         document.addEventListener('DOMContentLoaded', function() {
             inicializarLogin();
         });
+        function aguardar(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        function criarErroChamadaGoogle(mensagemUsuario, detalhes) {
+            const erro = new Error(detalhes || mensagemUsuario);
+            erro.mensagemUsuario = mensagemUsuario;
+            return erro;
+        }
         // Função para chamar o Google Apps Script
-        async function callGoogleScript(action, data = {}) {
-            try {
-                const formData = new FormData();
-                formData.append('action', action);
-
-                // Adicionar dados ao formData
-                Object.keys(data).forEach(key => {
-                    const valor = data[key];
-                    if (valor === undefined || valor === null) {
-                        formData.append(key, '');
-                    } else if (valor instanceof Date) {
-                        formData.append(key, valor.toISOString());
-                    } else if (typeof valor === 'object') {
-                        formData.append(key, JSON.stringify(valor));
-                    } else {
-                        formData.append(key, valor);
+        async function callGoogleScript(action, data = {}, opcoes = {}) {
+            const tentativasConfiguradas = Number.isFinite(opcoes.tentativas) && opcoes.tentativas > 0
+                ? Math.floor(opcoes.tentativas)
+                : 3;
+            const intervaloBaseConfigurado = Number.isFinite(opcoes.intervaloInicial) && opcoes.intervaloInicial > 0
+                ? opcoes.intervaloInicial
+                : 400;
+            const entradas = [];
+            Object.keys(data || {}).forEach(key => {
+                const valor = data[key];
+                if (valor === undefined || valor === null) {
+                    entradas.push([key, '']);
+                } else if (valor instanceof Date) {
+                    entradas.push([key, valor.toISOString()]);
+                } else if (typeof valor === 'object') {
+                    try {
+                        entradas.push([key, JSON.stringify(valor)]);
+                    } catch (erroJSON) {
+                        console.error(`Erro ao serializar campo ${key} da ação ${action}:`, erroJSON);
+                        entradas.push([key, '']);
                     }
-                });
+                } else {
+                    entradas.push([key, valor]);
+                }
+            });
 
-                const response = await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!response.ok) {
-                    const mensagem = `Erro ${response.status} ao comunicar com o servidor (ação: ${action})`;
-                    console.error(mensagem);
-                    mostrarErro(mensagem);
-                    return { success: false, error: mensagem, _erroNotificado: true };
-                }
-                const textoResposta = await response.text();
-                if (!textoResposta) {
-                    const mensagem = `Resposta vazia do servidor (ação: ${action})`;
-                    console.error(mensagem);
-                    mostrarErro(mensagem);
-                    return { success: false, error: mensagem, _erroNotificado: true };
-                }
+            let atraso = intervaloBaseConfigurado;
+            const maxTentativas = Math.max(1, tentativasConfiguradas);
+
+            for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
                 try {
-                    return JSON.parse(textoResposta);
-                } catch (parseError) {
-                    console.error(`Falha ao interpretar a resposta da ação ${action}:`, parseError, textoResposta);
-                    const mensagem = `Resposta inválida do servidor (ação: ${action})`;
-                    mostrarErro(mensagem);
-                    return { success: false, error: mensagem, _erroNotificado: true };
+                    const formData = new FormData();
+                    formData.append('action', action);
+                    entradas.forEach(([chave, valor]) => formData.append(chave, valor));
+
+                    const response = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const mensagem = `Erro ${response.status} ao comunicar com o servidor (ação: ${action})`;
+                        console.error(mensagem);
+                        throw criarErroChamadaGoogle(mensagem, mensagem);
+                    }
+
+                    const textoResposta = await response.text();
+                    if (!textoResposta) {
+                        const mensagem = `Resposta vazia do servidor (ação: ${action})`;
+                        console.error(mensagem);
+                        throw criarErroChamadaGoogle(mensagem, mensagem);
+                    }
+
+                    try {
+                        return JSON.parse(textoResposta);
+                    } catch (parseError) {
+                        console.error(`Falha ao interpretar a resposta da ação ${action}:`, parseError, textoResposta);
+                        const mensagem = `Resposta inválida do servidor (ação: ${action})`;
+                        throw criarErroChamadaGoogle(mensagem, parseError && parseError.message ? parseError.message : mensagem);
+                    }
+                } catch (erro) {
+                    const ultimaTentativa = tentativa === maxTentativas;
+                    console.error(`Erro ao chamar Google Script (ação: ${action}, tentativa ${tentativa}/${maxTentativas}):`, erro);
+                    if (ultimaTentativa) {
+                        const mensagemUsuario = erro && erro.mensagemUsuario ? erro.mensagemUsuario : 'Erro de conexão com o servidor';
+                        mostrarErro(mensagemUsuario);
+                        const mensagemDetalhada = erro && erro.message ? erro.message : mensagemUsuario;
+                        return { success: false, error: mensagemDetalhada, _erroNotificado: true };
+                    }
+                    await aguardar(atraso);
+                    atraso = Math.min(atraso * 1.8, 2000);
                 }
-            } catch (error) {
-                console.error('Erro ao chamar Google Script:', error);
-                mostrarErro('Erro de conexão com o servidor');
-                return { success: false, error: error.message, _erroNotificado: true };
             }
+
+            mostrarErro('Erro de conexão com o servidor');
+            return { success: false, error: 'Erro de conexão com o servidor', _erroNotificado: true };
         }
         async function inicializarAplicacao() {
             if (aplicacaoInicializada) {
