@@ -2318,15 +2318,19 @@
         function inicializarEventos() {
             // Seletor de perfil
             if (elementos.profileSelect) {
-                elementos.profileSelect.addEventListener('change', function() {
+                elementos.profileSelect.addEventListener('change', async function() {
                     estado.perfilAtual = this.value;
+                    await carregarArmarios();
+                    await carregarEstatisticas();
                     atualizarInterface();
                     carregarDadosTabelas();
                 });
             }
             if (elementos.unitSelect) {
-                elementos.unitSelect.addEventListener('change', function() {
+                elementos.unitSelect.addEventListener('change', async function() {
                     estado.unidadeAtual = this.value;
+                    await carregarArmarios();
+                    await carregarEstatisticas();
                     atualizarInterface();
                     carregarDadosTabelas();
                 });

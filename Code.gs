@@ -14,6 +14,78 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+function normalizarTextoBasico(valor) {
+  if (valor === null || valor === undefined) {
+    return '';
+  }
+  var texto = valor.toString().trim().toLowerCase();
+  if (typeof texto.normalize === 'function') {
+    texto = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+  return texto;
+}
+
+function obterEstruturaPlanilha(sheet) {
+  var ultimaColuna = sheet.getLastColumn();
+  var cabecalhos = ultimaColuna > 0 ? sheet.getRange(1, 1, 1, ultimaColuna).getValues()[0] : [];
+  var mapaIndices = {};
+
+  cabecalhos.forEach(function(cabecalho, indice) {
+    var chave = normalizarTextoBasico(cabecalho);
+    if (chave && mapaIndices[chave] === undefined) {
+      mapaIndices[chave] = indice;
+    }
+  });
+
+  return {
+    ultimaColuna: ultimaColuna,
+    mapaIndices: mapaIndices
+  };
+}
+
+function obterIndiceColuna(estrutura, chave, padrao) {
+  if (estrutura.mapaIndices.hasOwnProperty(chave)) {
+    return estrutura.mapaIndices[chave];
+  }
+  return padrao;
+}
+
+function obterValorLinha(linha, estrutura, chave, padrao) {
+  var indice = obterIndiceColuna(estrutura, chave, null);
+  if (indice === null || indice === undefined) {
+    return padrao;
+  }
+  if (indice >= linha.length) {
+    return padrao;
+  }
+  return linha[indice];
+}
+
+function definirValorLinha(linha, estrutura, chave, valor) {
+  var indice = obterIndiceColuna(estrutura, chave, null);
+  if (indice === null || indice === undefined) {
+    return;
+  }
+  while (linha.length < estrutura.ultimaColuna) {
+    linha.push('');
+  }
+  linha[indice] = valor;
+}
+
+function converterParaBoolean(valor) {
+  if (valor === true || valor === false) {
+    return valor;
+  }
+  if (typeof valor === 'number') {
+    return valor !== 0;
+  }
+  if (typeof valor === 'string') {
+    var texto = valor.trim().toLowerCase();
+    return texto === 'true' || texto === '1' || texto === 'sim';
+  }
+  return false;
+}
+
 // ID da pasta do Drive para salvar os PDFs - ATUALIZE COM SEU ID
 const PASTA_DRIVE_ID = '1nYsGJJUIufxDYVvIanVXCbPx7YuBOYDP';
 
@@ -269,69 +341,110 @@ function getArmarios(tipo) {
 function getArmariosFromSheet(sheetName, tipo, termosMap) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(sheetName);
-  
+
   if (!sheet || sheet.getLastRow() < 2) {
     return [];
   }
-  
+
   var isVisitante = sheetName === 'Visitantes';
-  var numColumns = isVisitante ? 13 : 12;
-  var unidadeIndex = 10;
-  var termoIndex = 11;
-  var whatsappIndex = isVisitante ? 12 : 9;
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, numColumns).getValues();
+  var estrutura = obterEstruturaPlanilha(sheet);
+  var totalLinhas = sheet.getLastRow() - 1;
+  var totalColunas = estrutura.ultimaColuna || (isVisitante ? 13 : 12);
+  var dados = sheet.getRange(2, 1, totalLinhas, totalColunas).getValues();
   var armarios = [];
 
-  data.forEach(function(row) {
-    if (row[0]) {
-      var armario = {
-        id: row[0],
-        numero: row[1],
-        status: row[2],
-        nomeVisitante: row[3] || '',
-        nomePaciente: row[4] || '',
-        leito: row[5] || '',
-        volumes: row[6] || 0,
-        horaInicio: row[7] || '',
-        tipo: tipo,
-        unidade: row[unidadeIndex] || '',
-        termoAplicado: row[termoIndex] || false,
-        whatsapp: row[whatsappIndex] || ''
-      };
+  var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+  var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
+  var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
+  var nomeIndex = obterIndiceColuna(estrutura, isVisitante ? 'nome visitante' : 'nome acompanhante', 3);
+  var pacienteIndex = obterIndiceColuna(estrutura, 'nome paciente', 4);
+  var leitoIndex = obterIndiceColuna(estrutura, 'leito', 5);
+  var volumesIndex = obterIndiceColuna(estrutura, 'volumes', 6);
+  var horaInicioIndex = obterIndiceColuna(estrutura, 'hora inicio', 7);
+  var horaPrevistaIndex = isVisitante ? obterIndiceColuna(estrutura, 'hora prevista', 8) : -1;
+  var dataRegistroIndex = obterIndiceColuna(estrutura, 'data registro', isVisitante ? 9 : 8);
+    var unidadeIndex = obterIndiceColuna(estrutura, 'unidade', isVisitante ? 10 : 10);
+    var termoIndex = obterIndiceColuna(estrutura, 'termo aplicado', isVisitante ? 11 : 11);
+    var whatsappIndex = obterIndiceColuna(estrutura, 'whatsapp', isVisitante ? 12 : 9);
 
-      if (isVisitante) {
-        armario.horaPrevista = row[8] || '';
-        armario.dataRegistro = row[9] || '';
-      } else {
-        armario.dataRegistro = row[8] || '';
-      }
+  dados.forEach(function(row) {
+    var id = row[idIndex];
+    if (!id && id !== 0) {
+      return;
+    }
 
-      if (tipo === 'acompanhante') {
-        var termoRelacionado = termosMap ? termosMap[armario.id] : null;
-        if (termoRelacionado) {
-          armario.termoAplicado = true;
-          armario.termoFinalizado = Boolean(termoRelacionado.pdfUrl);
-          armario.termoInfo = {
-            id: termoRelacionado.id,
-            aplicadoEm: termoRelacionado.aplicadoEm,
-            finalizadoEm: termoRelacionado.assinaturas.finalizadoEm,
-            pdfUrl: termoRelacionado.pdfUrl || '',
-            responsavel: termoRelacionado.acompanhante,
-            metodoFinal: termoRelacionado.assinaturas.metodoFinal,
-            cpfFinal: termoRelacionado.assinaturas.cpfFinal
-          };
-        } else {
-          armario.termoAplicado = false;
-          armario.termoFinalizado = false;
-          armario.termoInfo = null;
-        }
+    var statusValor = row[statusIndex];
+    var statusNormalizado = normalizarTextoBasico(statusValor);
+    var status;
+    switch (statusNormalizado) {
+      case 'em-uso':
+      case 'em uso':
+        status = 'em-uso';
+        break;
+      case 'proximo':
+        status = 'proximo';
+        break;
+      case 'vencido':
+        status = 'vencido';
+        break;
+      case 'livre':
+        status = 'livre';
+        break;
+      default:
+        status = statusNormalizado || 'livre';
+        break;
+    }
+
+    var armario = {
+      id: id,
+      numero: row[numeroIndex] || '',
+      status: status,
+      nomeVisitante: row[nomeIndex] || '',
+      nomePaciente: row[pacienteIndex] || '',
+      leito: row[leitoIndex] || '',
+      volumes: row[volumesIndex] || 0,
+      horaInicio: row[horaInicioIndex] || '',
+      tipo: tipo,
+      unidade: unidadeIndex !== null && unidadeIndex !== undefined ? (row[unidadeIndex] || '') : '',
+      termoAplicado: termoIndex !== null && termoIndex !== undefined ? converterParaBoolean(row[termoIndex]) : false,
+      whatsapp: whatsappIndex !== null && whatsappIndex !== undefined ? (row[whatsappIndex] || '') : ''
+    };
+
+    if (isVisitante) {
+      armario.horaPrevista = horaPrevistaIndex > -1 ? (row[horaPrevistaIndex] || '') : '';
+      armario.dataRegistro = dataRegistroIndex > -1 ? (row[dataRegistroIndex] || '') : '';
+    } else {
+      armario.dataRegistro = dataRegistroIndex > -1 ? (row[dataRegistroIndex] || '') : '';
+    }
+
+    var volumesNumero = parseInt(armario.volumes, 10);
+    armario.volumes = isNaN(volumesNumero) ? 0 : volumesNumero;
+
+    if (tipo === 'acompanhante') {
+      var termoRelacionado = termosMap ? termosMap[armario.id] : null;
+      if (termoRelacionado) {
+        armario.termoAplicado = true;
+        armario.termoFinalizado = Boolean(termoRelacionado.pdfUrl);
+        armario.termoInfo = {
+          id: termoRelacionado.id,
+          aplicadoEm: termoRelacionado.aplicadoEm,
+          finalizadoEm: termoRelacionado.assinaturas.finalizadoEm,
+          pdfUrl: termoRelacionado.pdfUrl || '',
+          responsavel: termoRelacionado.acompanhante,
+          metodoFinal: termoRelacionado.assinaturas.metodoFinal,
+          cpfFinal: termoRelacionado.assinaturas.cpfFinal
+        };
       } else {
+        armario.termoAplicado = false;
         armario.termoFinalizado = false;
         armario.termoInfo = null;
       }
-
-      armarios.push(armario);
+    } else {
+      armario.termoFinalizado = false;
+      armario.termoInfo = null;
     }
+
+    armarios.push(armario);
   });
 
   return armarios;
@@ -355,16 +468,20 @@ function cadastrarArmario(armarioData) {
       return { success: false, error: 'Nenhum armário cadastrado' };
     }
 
-    var numColumns = sheetName === 'Visitantes' ? 13 : 12;
-    var data = sheet.getRange(2, 1, totalLinhas - 1, numColumns).getValues();
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || (sheetName === 'Visitantes' ? 13 : 12);
+    var data = sheet.getRange(2, 1, totalLinhas - 1, totalColunas).getValues();
     var linhaPlanilha = -1;
     var linhaAtual = null;
     var idNumerico = Number(armarioData.id);
+    var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+    var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
+    var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
 
     for (var i = 0; i < data.length; i++) {
-      if (data[i][0] == idNumerico) {
+      if (data[i][idIndex] == idNumerico) {
         linhaPlanilha = i + 2;
-        linhaAtual = data[i];
+        linhaAtual = data[i].slice();
         break;
       }
     }
@@ -372,9 +489,10 @@ function cadastrarArmario(armarioData) {
     if ((linhaPlanilha === -1 || !linhaAtual) && armarioData.numero) {
       var numeroInformado = String(armarioData.numero);
       for (var j = 0; j < data.length; j++) {
-        if (data[j][1] === numeroInformado && data[j][2] === 'livre') {
+        var statusLinha = normalizarTextoBasico(data[j][statusIndex]);
+        if (data[j][numeroIndex] === numeroInformado && statusLinha === 'livre') {
           linhaPlanilha = j + 2;
-          linhaAtual = data[j];
+          linhaAtual = data[j].slice();
           break;
         }
       }
@@ -384,7 +502,8 @@ function cadastrarArmario(armarioData) {
       return { success: false, error: 'Armário não encontrado' };
     }
 
-    if (linhaAtual[2] !== 'livre') {
+    var statusAtual = normalizarTextoBasico(linhaAtual[statusIndex]);
+    if (statusAtual !== 'livre') {
       return { success: false, error: 'Armário já está em uso' };
     }
 
@@ -395,46 +514,31 @@ function cadastrarArmario(armarioData) {
       volumes = 0;
     }
     var whatsapp = armarioData.whatsapp || '';
-    var numeroArmario = linhaAtual[1];
-    var unidadeIndex = 10;
-    var unidadeAtual = linhaAtual[unidadeIndex] || '';
-    var novaLinha;
-
-    if (sheetName === 'Visitantes') {
-      var horaPrevista = armarioData.horaPrevista || '';
-      novaLinha = [
-        linhaAtual[0],
-        numeroArmario,
-        'em-uso',
-        armarioData.nomeVisitante,
-        armarioData.nomePaciente,
-        armarioData.leito,
-        volumes,
-        horaInicio,
-        horaPrevista,
-        agora,
-        unidadeAtual,
-        false,
-        whatsapp
-      ];
-    } else {
-      novaLinha = [
-        linhaAtual[0],
-        numeroArmario,
-        'em-uso',
-        armarioData.nomeVisitante,
-        armarioData.nomePaciente,
-        armarioData.leito,
-        volumes,
-        horaInicio,
-        agora,
-        whatsapp,
-        unidadeAtual,
-        false
-      ];
+    var numeroArmario = linhaAtual[numeroIndex];
+    var unidadeAtual = obterValorLinha(linhaAtual, estrutura, 'unidade', '');
+    var novaLinha = linhaAtual.slice();
+    while (novaLinha.length < totalColunas) {
+      novaLinha.push('');
     }
+    var nomeColuna = sheetName === 'Visitantes' ? 'nome visitante' : 'nome acompanhante';
 
-    sheet.getRange(linhaPlanilha, 1, 1, novaLinha.length).setValues([novaLinha]);
+    definirValorLinha(novaLinha, estrutura, 'status', 'em-uso');
+    definirValorLinha(novaLinha, estrutura, nomeColuna, armarioData.nomeVisitante);
+    definirValorLinha(novaLinha, estrutura, 'nome paciente', armarioData.nomePaciente);
+    definirValorLinha(novaLinha, estrutura, 'leito', armarioData.leito);
+    definirValorLinha(novaLinha, estrutura, 'volumes', volumes);
+    definirValorLinha(novaLinha, estrutura, 'hora inicio', horaInicio);
+    if (sheetName === 'Visitantes') {
+      definirValorLinha(novaLinha, estrutura, 'hora prevista', armarioData.horaPrevista || '');
+    } else {
+      definirValorLinha(novaLinha, estrutura, 'hora prevista', '');
+    }
+    definirValorLinha(novaLinha, estrutura, 'data registro', agora);
+    definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
+    definirValorLinha(novaLinha, estrutura, 'whatsapp', whatsapp);
+    definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
+
+    sheet.getRange(linhaPlanilha, 1, 1, totalColunas).setValues([novaLinha]);
 
     var historicoLastRow = historicoSheet.getLastRow();
     var historicoId = historicoLastRow > 1 ? Math.max(...historicoSheet.getRange(2, 1, historicoLastRow - 1, 1).getValues().flat()) + 1 : 1;
@@ -462,7 +566,7 @@ function cadastrarArmario(armarioData) {
     return {
       success: true,
       message: 'Armário cadastrado com sucesso',
-      id: linhaAtual[0]
+      id: linhaAtual[idIndex]
     };
 
   } catch (error) {
@@ -485,15 +589,17 @@ function liberarArmario(id, tipo) {
     }
     
     // Encontrar o armário na aba atual
-    var numColumns = sheetName === 'Visitantes' ? 13 : 12;
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, numColumns).getValues();
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || (sheetName === 'Visitantes' ? 13 : 12);
+    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, totalColunas).getValues();
     var armarioIndex = -1;
     var armarioData = null;
-    
+    var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+
     data.forEach(function(row, index) {
-      if (row[0] == id) {
+      if (row[idIndex] == id) {
         armarioIndex = index;
-        armarioData = row;
+        armarioData = row.slice();
       }
     });
     
@@ -504,51 +610,37 @@ function liberarArmario(id, tipo) {
     var linha = armarioIndex + 2;
     
     // Limpar dados do armário (deixar apenas número e status livre)
-    var unidadeIndex = 10;
-    var unidadeAtual = armarioData[unidadeIndex] || '';
-    var novaLinha;
-
-    if (tipo === 'visitante') {
-      novaLinha = [
-        armarioData[0], // ID
-        armarioData[1], // Número
-        'livre', // Status
-        '', // Nome
-        '', // Paciente
-        '', // Leito
-        '', // Volumes
-        '', // Hora Início
-        '', // Hora Prevista
-        new Date(), // Data Registro
-        unidadeAtual, // Unidade
-        false, // TermoAplicado
-        '' // WhatsApp
-      ];
-    } else {
-      novaLinha = [
-        armarioData[0], // ID
-        armarioData[1], // Número
-        'livre', // Status
-        '', // Nome
-        '', // Paciente
-        '', // Leito
-        '', // Volumes
-        '', // Hora Início
-        new Date(), // Data Registro
-        '', // WhatsApp
-        unidadeAtual, // Unidade
-        false // TermoAplicado
-      ];
+    var unidadeAtual = obterValorLinha(armarioData, estrutura, 'unidade', '');
+    var novaLinha = armarioData.slice();
+    while (novaLinha.length < totalColunas) {
+      novaLinha.push('');
     }
 
-    sheet.getRange(linha, 1, 1, novaLinha.length).setValues([novaLinha]);
+    var nomeColuna = sheetName === 'Visitantes' ? 'nome visitante' : 'nome acompanhante';
+    definirValorLinha(novaLinha, estrutura, 'status', 'livre');
+    definirValorLinha(novaLinha, estrutura, nomeColuna, '');
+    definirValorLinha(novaLinha, estrutura, 'nome paciente', '');
+    definirValorLinha(novaLinha, estrutura, 'leito', '');
+    definirValorLinha(novaLinha, estrutura, 'volumes', '');
+    definirValorLinha(novaLinha, estrutura, 'hora inicio', '');
+    if (sheetName === 'Visitantes') {
+      definirValorLinha(novaLinha, estrutura, 'hora prevista', '');
+    }
+    definirValorLinha(novaLinha, estrutura, 'data registro', new Date());
+    definirValorLinha(novaLinha, estrutura, 'whatsapp', '');
+    definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
+    definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
+
+    sheet.getRange(linha, 1, 1, totalColunas).setValues([novaLinha]);
 
     // Atualizar histórico - encontrar a entrada mais recente deste armário
     var historicoData = historicoSheet.getRange(2, 1, historicoSheet.getLastRow()-1, 13).getValues();
     var historicoIndex = -1;
-    
+    var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
+    var numeroArmario = obterValorLinha(armarioData, estrutura, 'numero', armarioData[numeroIndex]);
+
     for (var i = historicoData.length - 1; i >= 0; i--) {
-      if (historicoData[i][2] === armarioData[1] && historicoData[i][9] === 'EM USO') {
+      if (historicoData[i][2] === numeroArmario && historicoData[i][9] === 'EM USO') {
         historicoIndex = i;
         break;
       }
@@ -561,12 +653,135 @@ function liberarArmario(id, tipo) {
       historicoSheet.getRange(historicoLinha, 10).setValue('FINALIZADO'); // Status
     }
     
-    registrarLog('LIBERAÇÃO', `Armário ${armarioData[1]} liberado`);
+    registrarLog('LIBERAÇÃO', `Armário ${numeroArmario} liberado`);
 
     return { success: true, message: 'Armário liberado com sucesso' };
     
   } catch (error) {
     registrarLog('ERRO', `Erro ao liberar armário: ${error.toString()}`);
+    return { success: false, error: error.toString() };
+  }
+}
+
+// Funções para Usuários
+function getUsuarios() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Usuários');
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: true, data: [] };
+    }
+
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || 8;
+    var dados = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
+    var usuarios = [];
+
+    dados.forEach(function(linha) {
+      var id = obterValorLinha(linha, estrutura, 'id', linha[0]);
+      if (!id && id !== 0) {
+        return;
+      }
+
+      var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
+      var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
+
+      usuarios.push({
+        id: id,
+        nome: obterValorLinha(linha, estrutura, 'nome', ''),
+        email: obterValorLinha(linha, estrutura, 'email', ''),
+        perfil: perfil,
+        acessoVisitantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso visitantes', false)),
+        acessoAcompanhantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso acompanhantes', false)),
+        dataCadastro: obterValorLinha(linha, estrutura, 'data cadastro', ''),
+        status: obterValorLinha(linha, estrutura, 'status', '')
+      });
+    });
+
+    return { success: true, data: usuarios };
+
+  } catch (error) {
+    registrarLog('ERRO', `Erro ao buscar usuários: ${error.toString()}`);
+    return { success: false, error: error.toString() };
+  }
+}
+
+function cadastrarUsuario(dados) {
+  try {
+    var nome = (dados.nome || '').toString().trim();
+    var email = (dados.email || '').toString().trim();
+    var perfil = (dados.perfil || '').toString().trim().toLowerCase();
+
+    if (!nome || !email || !perfil) {
+      return { success: false, error: 'Nome, email e perfil são obrigatórios' };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Usuários');
+
+    if (!sheet) {
+      return { success: false, error: 'Aba de usuários não encontrada' };
+    }
+
+    var estrutura = obterEstruturaPlanilha(sheet);
+    var totalColunas = estrutura.ultimaColuna || 8;
+    var ultimaLinha = sheet.getLastRow();
+    var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+    var proximoId = 1;
+
+    if (ultimaLinha >= 2) {
+      var idRange = sheet.getRange(2, idIndex + 1, ultimaLinha - 1, 1).getValues().flat();
+      var idsNumericos = idRange.map(function(valor) {
+        var numero = parseInt(valor, 10);
+        return isNaN(numero) ? null : numero;
+      }).filter(function(valor) {
+        return valor !== null;
+      });
+      var ultimoId = idsNumericos.length > 0 ? Math.max.apply(null, idsNumericos) : 0;
+      proximoId = ultimoId + 1;
+    }
+
+    var acessoVisitantes = converterParaBoolean(dados.acessoVisitantes);
+    var acessoAcompanhantes = converterParaBoolean(dados.acessoAcompanhantes);
+    var dataCadastro = new Date();
+
+    var novaLinha = new Array(totalColunas);
+    for (var i = 0; i < totalColunas; i++) {
+      novaLinha[i] = '';
+    }
+
+    definirValorLinha(novaLinha, estrutura, 'id', proximoId);
+    definirValorLinha(novaLinha, estrutura, 'nome', nome);
+    definirValorLinha(novaLinha, estrutura, 'email', email);
+    definirValorLinha(novaLinha, estrutura, 'perfil', perfil);
+    definirValorLinha(novaLinha, estrutura, 'acesso visitantes', acessoVisitantes);
+    definirValorLinha(novaLinha, estrutura, 'acesso acompanhantes', acessoAcompanhantes);
+    definirValorLinha(novaLinha, estrutura, 'data cadastro', dataCadastro);
+    definirValorLinha(novaLinha, estrutura, 'status', 'ativo');
+
+    sheet.getRange(ultimaLinha + 1, 1, 1, totalColunas).setValues([novaLinha]);
+
+    registrarLog('CADASTRO USUARIO', `Usuário ${nome} cadastrado`);
+
+    return {
+      success: true,
+      message: 'Usuário cadastrado com sucesso',
+      id: proximoId,
+      usuario: {
+        id: proximoId,
+        nome: nome,
+        email: email,
+        perfil: perfil,
+        acessoVisitantes: acessoVisitantes,
+        acessoAcompanhantes: acessoAcompanhantes,
+        dataCadastro: dataCadastro,
+        status: 'ativo'
+      }
+    };
+
+  } catch (error) {
+    registrarLog('ERRO', `Erro ao cadastrar usuário: ${error.toString()}`);
     return { success: false, error: error.toString() };
   }
 }
