@@ -4446,25 +4446,31 @@
             if (!elementos.unitSelect) return;
             const valorAtual = (estado.unidadeAtual || 'todas').toString().trim();
             const valorAtualNormalizado = normalizarTexto(valorAtual);
-            const opcoes = estado.unidades.map(unidade => {
+            const unidadesDisponiveis = obterUnidadesPermitidas();
+            const deveIncluirOpcaoTodas = perfilAtualEhAdmin() || obterIdsPermitidos() === null;
+            const opcoes = unidadesDisponiveis.map(unidade => {
                 const nomeLimpo = (unidade.nome || '').trim();
                 const desativada = unidade.status !== 'ativa';
                 const label = desativada ? `${nomeLimpo} (inativa)` : nomeLimpo;
                 const descricao = desativada ? 'Unidade temporariamente indisponível' : 'Filtrar por este setor';
                 return `<option value="${nomeLimpo}" ${desativada ? 'disabled' : ''} data-icon="fas fa-location-dot" data-description="${descricao}">${label}</option>`;
             }).join('');
-            elementos.unitSelect.innerHTML = `
-                <option value="todas" data-icon="fas fa-layer-group" data-description="Visualização geral por setor">Todas as unidades</option>
-                ${opcoes}
-            `;
+            const opcaoTodas = `<option value="todas" data-icon="fas fa-layer-group" data-description="Visualização geral por setor">Todas as unidades</option>`;
+            elementos.unitSelect.innerHTML = `${deveIncluirOpcaoTodas ? opcaoTodas : ''}${opcoes}`;
             const opcaoCorrespondente = Array.from(elementos.unitSelect.options)
                 .find(option => normalizarTexto(option.value) === valorAtualNormalizado);
             if (opcaoCorrespondente) {
                 elementos.unitSelect.value = opcaoCorrespondente.value;
                 estado.unidadeAtual = opcaoCorrespondente.value;
             } else {
-                elementos.unitSelect.value = 'todas';
-                estado.unidadeAtual = 'todas';
+                if (!deveIncluirOpcaoTodas && unidadesDisponiveis.length) {
+                    const primeiraUnidade = (unidadesDisponiveis[0].nome || '').trim();
+                    elementos.unitSelect.value = primeiraUnidade;
+                    estado.unidadeAtual = primeiraUnidade;
+                } else {
+                    elementos.unitSelect.value = 'todas';
+                    estado.unidadeAtual = 'todas';
+                }
             }
             atualizarSelectorPersonalizado(elementos.unitSelect);
         }
