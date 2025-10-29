@@ -389,9 +389,18 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
   var horaInicioIndex = obterIndiceColuna(estrutura, 'hora inicio', 7);
   var horaPrevistaIndex = isVisitante ? obterIndiceColuna(estrutura, 'hora prevista', 8) : -1;
   var dataRegistroIndex = obterIndiceColuna(estrutura, 'data registro', isVisitante ? 9 : 8);
-    var unidadeIndex = obterIndiceColuna(estrutura, 'unidade', isVisitante ? 10 : 10);
-    var termoIndex = obterIndiceColuna(estrutura, 'termo aplicado', isVisitante ? 11 : 11);
-    var whatsappIndex = obterIndiceColuna(estrutura, 'whatsapp', isVisitante ? 12 : 9);
+  var unidadeIndex = obterIndiceColuna(estrutura, 'unidade', null);
+  if (unidadeIndex === null || unidadeIndex === undefined) {
+    unidadeIndex = isVisitante ? 10 : 10;
+  }
+  var termoIndex = obterIndiceColuna(estrutura, 'termo aplicado', null);
+  if (termoIndex === null || termoIndex === undefined) {
+    termoIndex = isVisitante ? 11 : 11;
+  }
+  var whatsappIndex = obterIndiceColuna(estrutura, 'whatsapp', null);
+  if (whatsappIndex === null || whatsappIndex === undefined) {
+    whatsappIndex = isVisitante ? 12 : 9;
+  }
 
   dados.forEach(function(row) {
     var id = row[idIndex];
