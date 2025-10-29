@@ -157,6 +157,171 @@ function normalizarListaUnidadesParametro(valor) {
   return [];
 }
 
+function obterMapasUnidades() {
+  var mapas = {
+    porId: {},
+    porNome: {}
+  };
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Unidades');
+
+    if (!sheet) {
+      return mapas;
+    }
+
+    var ultimaLinha = sheet.getLastRow();
+    if (ultimaLinha < 2) {
+      return mapas;
+    }
+
+    var dados = sheet.getRange(2, 1, ultimaLinha - 1, 2).getValues();
+    dados.forEach(function(row) {
+      var id = row[0];
+      var nome = row[1];
+      if (id === null || id === undefined) {
+        return;
+      }
+      var idTexto = id.toString().trim();
+      if (!idTexto) {
+        return;
+      }
+      var nomeTexto = nome !== null && nome !== undefined ? nome.toString().trim() : '';
+      mapas.porId[idTexto] = nomeTexto;
+      if (nomeTexto) {
+        var chaveNome = normalizarTextoBasico(nomeTexto);
+        if (!mapas.porNome[chaveNome]) {
+          mapas.porNome[chaveNome] = idTexto;
+        }
+      }
+    });
+  } catch (erroMapas) {
+    console.error('Erro ao obter mapas de unidades:', erroMapas);
+  }
+
+  return mapas;
+}
+
+function formatarUnidadesParaRegistro(unidadesIds, mapas) {
+  if (!Array.isArray(unidadesIds)) {
+    return [];
+  }
+
+  var resultado = [];
+  unidadesIds.forEach(function(unidadeId) {
+    if (unidadeId === null || unidadeId === undefined) {
+      return;
+    }
+
+    var chave = unidadeId.toString().trim();
+    if (!chave) {
+      return;
+    }
+
+    if (normalizarTextoBasico(chave) === 'all') {
+      if (resultado.indexOf('Todas as unidades') === -1) {
+        resultado.push('Todas as unidades');
+      }
+      return;
+    }
+
+    var nome = mapas && mapas.porId ? mapas.porId[chave] : '';
+    if (nome) {
+      if (resultado.indexOf(nome) === -1) {
+        resultado.push(nome);
+      }
+    } else {
+      if (resultado.indexOf(chave) === -1) {
+        resultado.push(chave);
+      }
+    }
+  });
+
+  return resultado;
+}
+
+function resolverIdsUnidadesArmazenadas(unidadesValor, mapas) {
+  var brutas = normalizarListaUnidadesParametro(unidadesValor);
+  if (!brutas.length) {
+    return [];
+  }
+
+  var ids = [];
+  brutas.forEach(function(item) {
+    if (item === null || item === undefined) {
+      return;
+    }
+
+    var textoOriginal = item.toString().trim();
+    if (!textoOriginal) {
+      return;
+    }
+
+    var textoNormalizado = normalizarTextoBasico(textoOriginal);
+    if (textoNormalizado === 'all' || textoNormalizado === 'todas as unidades') {
+      if (ids.indexOf('all') === -1) {
+        ids.push('all');
+      }
+      return;
+    }
+
+    if (mapas && mapas.porId && mapas.porId.hasOwnProperty(textoOriginal)) {
+      if (ids.indexOf(textoOriginal) === -1) {
+        ids.push(textoOriginal);
+      }
+      return;
+    }
+
+    var separadores = [' - ', '|', ':', '–', ' — '];
+    for (var i = 0; i < separadores.length; i++) {
+      var sep = separadores[i];
+      if (textoOriginal.indexOf(sep) !== -1) {
+        var candidato = textoOriginal.split(sep)[0].trim();
+        if (candidato) {
+          if (mapas && mapas.porId && mapas.porId.hasOwnProperty(candidato)) {
+            if (ids.indexOf(candidato) === -1) {
+              ids.push(candidato);
+            }
+            return;
+          }
+          if (mapas && mapas.porNome) {
+            var candidatoNormalizado = normalizarTextoBasico(candidato);
+            var idPorNome = mapas.porNome[candidatoNormalizado];
+            if (idPorNome && ids.indexOf(idPorNome) === -1) {
+              ids.push(idPorNome);
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    if (mapas && mapas.porNome) {
+      var idPorNomeDireto = mapas.porNome[textoNormalizado];
+      if (idPorNomeDireto && ids.indexOf(idPorNomeDireto) === -1) {
+        ids.push(idPorNomeDireto);
+        return;
+      }
+    }
+
+    var matchNumero = textoOriginal.match(/\d+/);
+    if (matchNumero && mapas && mapas.porId && mapas.porId.hasOwnProperty(matchNumero[0])) {
+      var idNumero = matchNumero[0];
+      if (ids.indexOf(idNumero) === -1) {
+        ids.push(idNumero);
+      }
+      return;
+    }
+
+    if (ids.indexOf(textoOriginal) === -1) {
+      ids.push(textoOriginal);
+    }
+  });
+
+  return ids;
+}
+
 // ID da pasta do Drive para salvar os PDFs - ATUALIZE COM SEU ID
 const PASTA_DRIVE_ID = '1nYsGJJUIufxDYVvIanVXCbPx7YuBOYDP';
 
@@ -794,6 +959,7 @@ function getUsuarios() {
 
     var estrutura = obterEstruturaPlanilha(sheet);
     var totalColunas = estrutura.ultimaColuna || 10;
+    var mapasUnidades = obterMapasUnidades();
     var dados = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
     var usuarios = [];
 
@@ -806,7 +972,7 @@ function getUsuarios() {
       var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
       var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
       var unidadesBrutas = obterValorLinha(linha, estrutura, 'unidades', '');
-      var unidades = normalizarListaUnidadesParametro(unidadesBrutas);
+      var unidades = resolverIdsUnidadesArmazenadas(unidadesBrutas, mapasUnidades);
       var unidadesUnicas = [];
       unidades.forEach(function(unidade) {
         if (unidadesUnicas.indexOf(unidade) === -1) {
@@ -876,7 +1042,9 @@ function cadastrarUsuario(dados) {
       return { success: false, error: 'Informe ao menos uma unidade de acesso' };
     }
 
-    var unidadesTexto = unidadesUnicas.join(';');
+    var mapasUnidades = obterMapasUnidades();
+    var unidadesFormatadas = formatarUnidadesParaRegistro(unidadesUnicas, mapasUnidades);
+    var unidadesTexto = unidadesFormatadas.join('; ');
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Usuários');
@@ -999,7 +1167,9 @@ function atualizarUsuario(dados) {
       return { success: false, error: 'Informe ao menos uma unidade de acesso' };
     }
 
-    var unidadesTexto = unidadesUnicas.join(';');
+    var mapasUnidades = obterMapasUnidades();
+    var unidadesFormatadas = formatarUnidadesParaRegistro(unidadesUnicas, mapasUnidades);
+    var unidadesTexto = unidadesFormatadas.join('; ');
 
     if (!status || ['ativo', 'inativo'].indexOf(status) === -1) {
       status = 'ativo';
@@ -1127,6 +1297,7 @@ function autenticarUsuario(dados) {
 
     var estrutura = obterEstruturaPlanilha(sheet);
     var totalColunas = estrutura.ultimaColuna || 10;
+    var mapasUnidades = obterMapasUnidades();
     var dadosUsuarios = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
     var alvoNormalizado = normalizarTextoBasico(login);
     var linhaUsuario = null;
@@ -1172,7 +1343,7 @@ function autenticarUsuario(dados) {
     }
 
     var unidadesTexto = obterValorLinha(linhaUsuario, estrutura, 'unidades', '');
-    var unidadesLista = normalizarListaUnidadesParametro(unidadesTexto);
+    var unidadesLista = resolverIdsUnidadesArmazenadas(unidadesTexto, mapasUnidades);
 
     var usuarioEncontrado = {
       id: obterValorLinha(linhaUsuario, estrutura, 'id', ''),
