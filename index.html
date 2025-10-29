@@ -4611,6 +4611,8 @@
                 mostrarErro('Apenas administradores podem salvar usuários.');
                 return;
             }
+            const botaoSalvar = document.getElementById('usuario-btn-salvar');
+            const finalizarLoading = iniciarLoadingBotao(botaoSalvar);
             const usuarioId = elementos.usuarioForm.dataset.id;
             const dados = {
                 id: usuarioId,
@@ -4623,19 +4625,23 @@
                 acessoAcompanhantes: document.getElementById('acesso-acompanhantes').checked,
                 unidades: obterUnidadesSelecionadasFormulario()
             };
-            if (!dados.unidades.length && dados.perfil !== 'admin') {
-                mostrarErro('Selecione ao menos uma unidade para o usuário.');
-                return;
-            }
-            const acao = usuarioId ? 'atualizarUsuario' : 'cadastrarUsuario';
-            const resultado = await callGoogleScript(acao, dados);
-            if (resultado.success) {
-                fecharModalUsuario();
-                mostrarSucesso(usuarioId ? 'Usuário atualizado com sucesso' : 'Usuário cadastrado com sucesso');
-                await carregarUsuarios();
-                carregarTabelaUsuarios();
-            } else {
-                notificarErroPadrao(resultado);
+            try {
+                if (!dados.unidades.length && dados.perfil !== 'admin') {
+                    mostrarErro('Selecione ao menos uma unidade para o usuário.');
+                    return;
+                }
+                const acao = usuarioId ? 'atualizarUsuario' : 'cadastrarUsuario';
+                const resultado = await callGoogleScript(acao, dados);
+                if (resultado.success) {
+                    fecharModalUsuario();
+                    mostrarSucesso(usuarioId ? 'Usuário atualizado com sucesso' : 'Usuário cadastrado com sucesso');
+                    await carregarUsuarios();
+                    carregarTabelaUsuarios();
+                } else {
+                    notificarErroPadrao(resultado);
+                }
+            } finally {
+                finalizarLoading();
             }
         }
         // Liberar armário
