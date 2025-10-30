@@ -3460,6 +3460,7 @@
         let termoArmarioAtual = null;
         let movimentacaoArmarioAtual = null;
         let liberacaoArmarioAtual = null;
+        let liberacaoTipoAtual = 'acompanhante';
         let assinaturaDesenhada = false;
         let desenhandoAssinatura = false;
         let termoAssinaturaDesenhada = false;
@@ -4127,6 +4128,38 @@
             elementos.tabelaTermos.addEventListener('click', tratarAcaoTermo);
             if (elementos.tabelaUnidadesBody) {
                 elementos.tabelaUnidadesBody.addEventListener('click', tratarAcaoUnidade);
+            }
+            const tabelaVisitantes = document.querySelector('#tabela-visitantes');
+            if (tabelaVisitantes) {
+                tabelaVisitantes.addEventListener('click', async (evento) => {
+                    const alvo = evento.target.closest('[data-action]');
+                    if (!alvo) return;
+                    const id = parseInt(alvo.dataset.id, 10);
+                    if (Number.isNaN(id)) return;
+                    const acao = alvo.dataset.action;
+                    let finalizarLoading = () => {};
+                    if (alvo.tagName === 'BUTTON') {
+                        finalizarLoading = iniciarLoadingBotao(alvo);
+                    }
+                    try {
+                        switch (acao) {
+                            case 'usar':
+                                usarArmario(id);
+                                break;
+                            case 'liberar':
+                                if ((alvo.dataset.tipo || '').toLowerCase() === 'visitante') {
+                                    await confirmarLiberacaoVisitante(id);
+                                } else {
+                                    await abrirModalLiberacao(id, alvo.dataset.tipo || 'acompanhante');
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    } finally {
+                        finalizarLoading();
+                    }
+                });
             }
             const tabelaAcompanhantes = document.querySelector('#tabela-acompanhantes');
             if (tabelaAcompanhantes) {
@@ -5128,7 +5161,11 @@
                     }
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        abrirModalLiberacao(armario.id, armario.tipo);
+                        if (normalizarTexto(armario.tipo) === 'visitante') {
+                            confirmarLiberacaoVisitante(armario.id);
+                        } else {
+                            abrirModalLiberacao(armario.id, armario.tipo);
+                        }
                     } else if (result.isDenied) {
                         abrirMovimentacoes(armario.id);
                     }
@@ -5996,10 +6033,42 @@
                 mostrarErro('PDF não disponível para este termo');
             }
         }
+        async function confirmarLiberacaoVisitante(id) {
+            const armario = obterArmarioPorId(id);
+            if (!armario) {
+                mostrarErro('Armário não encontrado para liberação.');
+                return;
+            }
+            const resumoHtml = `
+                <div class="info-box" style="text-align:left;">
+                    <p><strong>Visitante:</strong> ${armario.nomeVisitante || '-'}</p>
+                    <p><strong>Paciente:</strong> ${armario.nomePaciente || '-'}</p>
+                    <p><strong>Leito:</strong> ${armario.leito || '-'}</p>
+                    <p><strong>Volumes:</strong> ${armario.volumes || '-'}</p>
+                    <p><strong>Início:</strong> ${armario.horaInicio || '-'}</p>
+                    ${armario.horaPrevista ? `<p><strong>Previsão de saída:</strong> ${armario.horaPrevista}</p>` : ''}
+                    ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
+                </div>
+            `;
+            const resultado = await Swal.fire({
+                title: `Encerrar armário ${armario.numero}?`,
+                html: `${resumoHtml}<p style="margin-top:12px; color:#4b5563;">Confirme que as informações estão corretas para finalizar o armário do visitante.</p>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Confirmo a liberação',
+                cancelButtonText: 'Cancelar',
+                focusConfirm: false
+            });
+            if (!resultado.isConfirmed) {
+                return;
+            }
+            await liberarArmario(id, 'visitante');
+        }
         async function abrirModalLiberacao(id, tipo) {
             const armario = obterArmarioPorId(id);
             if (!armario || armario.status === 'livre') return;
             liberacaoArmarioAtual = id;
+            liberacaoTipoAtual = (tipo || armario.tipo || 'acompanhante').toString().trim().toLowerCase();
             elementos.liberacaoArmario.textContent = armario.numero;
             elementos.liberacaoDetalhes.innerHTML = `
                 <p><strong>${armario.tipo === 'acompanhante' ? 'Acompanhante' : 'Visitante'}:</strong> ${armario.nomeVisitante}</p>
@@ -6028,6 +6097,7 @@
         function fecharModalLiberacao() {
             elementos.liberacaoModal.style.display = 'none';
             liberacaoArmarioAtual = null;
+            liberacaoTipoAtual = 'acompanhante';
         }
         function alternarMetodoLiberacao() {
             const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
@@ -6152,7 +6222,7 @@
 
                 const resultado = await callGoogleScript('liberarArmario', {
                     id: armarioId,
-                    tipo: 'acompanhante'
+                    tipo: liberacaoTipoAtual
                 });
                 if (resultado.success) {
                     fecharModalLiberacao();
