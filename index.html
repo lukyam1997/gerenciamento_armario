@@ -3303,6 +3303,14 @@
             }
         });
         const normalizarTexto = (valor) => (valor ?? '').toString().trim().toLowerCase();
+        const normalizarIdentificador = (valor) => (valor ?? '').toString().trim();
+        function extrairIdDataset(elemento) {
+            if (!elemento || !elemento.dataset) {
+                return '';
+            }
+            const bruto = elemento.dataset.id;
+            return bruto === undefined || bruto === null ? '' : normalizarIdentificador(bruto);
+        }
         function obterUsuarioAutenticado() {
             return estado.usuarioAutenticado || null;
         }
@@ -3494,6 +3502,19 @@
         });
         function aguardar(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        async function executarCarregamentoSeguro(descricao, acao) {
+            try {
+                const resultado = await acao();
+                const sucesso = resultado !== false;
+                if (!sucesso) {
+                    console.warn(`Carregamento concluído sem sucesso (${descricao}).`);
+                }
+                return { sucesso, descricao };
+            } catch (erro) {
+                console.error(`Erro ao executar carregamento (${descricao}):`, erro);
+                return { sucesso: false, descricao, erro };
+            }
         }
         function criarErroChamadaGoogle(mensagemUsuario, detalhes) {
             const erro = new Error(detalhes || mensagemUsuario);
@@ -3756,20 +3777,33 @@
                 return;
             }
             try {
-                // Verificar inicialização
                 const resultado = await callGoogleScript('verificarInicializacao');
                 if (!resultado.success || !resultado.inicializado) {
                     await callGoogleScript('inicializarPlanilha');
                 }
-                await carregarUnidades();
-                await Promise.all([
-                    carregarArmarios({ forcarAtualizacao: true }),
-                    carregarUsuarios(),
-                    carregarEstatisticas(),
-                    carregarNotificacoes()
-                ]);
-                atualizarInterface();
 
+                const carregamentoUnidades = await executarCarregamentoSeguro('carregar unidades', carregarUnidades);
+                const demaisCarregamentos = await Promise.all([
+                    executarCarregamentoSeguro('carregar armários', () => carregarArmarios({ forcarAtualizacao: true })),
+                    executarCarregamentoSeguro('carregar usuários', carregarUsuarios),
+                    executarCarregamentoSeguro('carregar estatísticas', carregarEstatisticas),
+                    executarCarregamentoSeguro('carregar notificações', carregarNotificacoes)
+                ]);
+
+                const resultados = [carregamentoUnidades, ...demaisCarregamentos];
+                const houveSucesso = resultados.some(item => item.sucesso);
+
+                if (!houveSucesso) {
+                    mostrarErro('Erro ao carregar dados do sistema');
+                    return;
+                }
+
+                const falhasParciais = resultados.filter(item => !item.sucesso);
+                if (falhasParciais.length) {
+                    console.warn('Falha ao carregar parte dos dados:', falhasParciais.map(item => item.descricao));
+                }
+
+                atualizarInterface();
             } catch (error) {
                 console.error('Erro ao carregar dados iniciais:', error);
                 mostrarErro('Erro ao carregar dados do sistema');
@@ -3777,10 +3811,10 @@
         }
         async function carregarArmarios({ forcarAtualizacao = false } = {}) {
             if (!estado.autenticado) {
-                return;
+                return false;
             }
             if (!forcarAtualizacao && estado.armariosCarregados) {
-                return;
+                return true;
             }
 
             const resultado = await callGoogleScript('getArmarios', {
@@ -3790,18 +3824,21 @@
             if (resultado.success) {
                 const armariosProcessados = (resultado.data || []).map(armario => ({
                     ...armario,
+                    id: normalizarIdentificador(armario.id),
                     unidade: armario.unidade ? armario.unidade.trim() : ''
                 }));
                 estado.armarios = filtrarListaPorPermissao(armariosProcessados, item => item.unidade);
                 estado.armariosCarregados = true;
                 atualizarResumoDashboardLocal();
-            } else {
-                estado.armariosCarregados = false;
+                return true;
             }
+
+            estado.armariosCarregados = false;
+            return false;
         }
         async function carregarUnidades() {
             if (!estado.autenticado) {
-                return;
+                return false;
             }
             const resultado = await callGoogleScript('getUnidades');
             if (resultado.success) {
@@ -3813,12 +3850,14 @@
                 if (estado.unidadeAtual !== 'todas' && !usuarioPodeVerUnidade(estado.unidadeAtual)) {
                     estado.unidadeAtual = 'todas';
                 }
+                return true;
             }
+            return false;
         }
         async function carregarUsuarios() {
             if (!estado.autenticado || !perfilAtualEhAdmin()) {
                 estado.usuarios = [];
-                return;
+                return true;
             }
             const resultado = await callGoogleScript('getUsuarios');
             if (resultado.success) {
@@ -3826,14 +3865,18 @@
                     ...usuario,
                     unidades: normalizarListaDeUnidades(usuario.unidades)
                 }));
+                return true;
             }
+            return false;
         }
         async function carregarEstatisticas() {
             atualizarResumoDashboardLocal();
+            return true;
         }
         async function carregarNotificacoes() {
             if (!estado.autenticado) {
-                return;
+                estado.notificacoes = [];
+                return true;
             }
             const resultado = await callGoogleScript('getNotificacoes');
             if (resultado.success) {
@@ -3842,7 +3885,9 @@
                     elementos.notificationBadge.textContent = estado.notificacoes.length;
                 }
                 atualizarPainelNotificacoes();
+                return true;
             }
+            return false;
         }
         function aguardarProximoFrame() {
             return new Promise(resolve => {
@@ -4156,8 +4201,8 @@
                 tabelaVisitantes.addEventListener('click', async (evento) => {
                     const alvo = evento.target.closest('[data-action]');
                     if (!alvo) return;
-                    const id = parseInt(alvo.dataset.id, 10);
-                    if (Number.isNaN(id)) return;
+                    const id = extrairIdDataset(alvo);
+                    if (!id) return;
                     const acao = alvo.dataset.action;
                     let finalizarLoading = () => {};
                     if (alvo.tagName === 'BUTTON') {
@@ -4188,8 +4233,8 @@
                 tabelaAcompanhantes.addEventListener('click', async (evento) => {
                     const alvo = evento.target.closest('[data-action]');
                     if (!alvo) return;
-                    const id = parseInt(alvo.dataset.id, 10);
-                    if (Number.isNaN(id)) return;
+                    const id = extrairIdDataset(alvo);
+                    if (!id) return;
                     const acao = alvo.dataset.action;
                     let finalizarLoading = () => {};
                     if (alvo.tagName === 'BUTTON') {
@@ -5504,7 +5549,8 @@
             }
         }
         function obterArmarioPorId(id) {
-            return estado.armarios.find(a => a.id === id);
+            const alvo = normalizarIdentificador(id);
+            return estado.armarios.find(a => normalizarIdentificador(a.id) === alvo);
         }
         function usarArmario(id) {
             const armario = obterArmarioPorId(id);
@@ -5976,8 +6022,8 @@
             const elementoAcao = evento.target.closest('[data-action]');
             if (!elementoAcao) return;
             const acao = elementoAcao.dataset.action;
-            const id = parseInt(elementoAcao.dataset.id, 10);
-            if (Number.isNaN(id)) return;
+            const id = extrairIdDataset(elementoAcao);
+            if (!id) return;
 
             let finalizarLoading = () => {};
             if (elementoAcao.tagName === 'BUTTON') {
