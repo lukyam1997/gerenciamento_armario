@@ -4461,8 +4461,11 @@
 
             const atualizacoes = {};
             let precisaAtualizar = false;
+            const statusNormalizado = normalizarTexto(armario.status);
+            const tipoNormalizado = normalizarTexto(armario.tipo);
+            const termoStatusNormalizado = normalizarTexto(armario.termoStatus);
 
-            if (armario.status !== 'livre') {
+            if (statusNormalizado !== 'livre') {
                 Object.assign(atualizacoes, {
                     status: 'livre',
                     nomeVisitante: '',
@@ -4476,7 +4479,7 @@
                 precisaAtualizar = true;
             }
 
-            if (armario.tipo === 'acompanhante') {
+            if (tipoNormalizado === 'acompanhante') {
                 if (!armario.termoFinalizado) {
                     atualizacoes.termoFinalizado = true;
                     precisaAtualizar = true;
@@ -4485,14 +4488,12 @@
                     atualizacoes.termoAplicado = false;
                     precisaAtualizar = true;
                 }
-                if (armario.termoStatus !== 'finalizado') {
+                if (termoStatusNormalizado !== 'finalizado') {
                     atualizacoes.termoStatus = 'finalizado';
                     precisaAtualizar = true;
                 }
-            }
 
-            if (armario.tipo === 'acompanhante' && armario.termoInfo) {
-                const termoAtualizado = { ...armario.termoInfo };
+                const termoAtualizado = { ...(armario.termoInfo || {}) };
                 let atualizouTermo = false;
 
                 if (!termoAtualizado.finalizadoEm) {
@@ -4509,12 +4510,13 @@
                     termoAtualizado.cpfConfirmacao = confirmacao;
                     atualizouTermo = true;
                 }
+
                 if (normalizarTexto(termoAtualizado.status) !== 'finalizado') {
                     termoAtualizado.status = 'Finalizado';
                     atualizouTermo = true;
                 }
 
-                if (atualizouTermo) {
+                if (!armario.termoInfo || atualizouTermo) {
                     atualizacoes.termoInfo = termoAtualizado;
                     precisaAtualizar = true;
                 }
@@ -4618,10 +4620,12 @@
             }
             armariosAcompanhantes.forEach(armario => {
                 const tr = document.createElement('tr');
-                const botoesTermo = armario.status !== 'livre'
-                    ? (armario.termoStatus === 'pendente'
+                const statusArmarioNormalizado = normalizarTexto(armario.status);
+                const statusTermoNormalizado = normalizarTexto(armario.termoStatus);
+                const botoesTermo = statusArmarioNormalizado !== 'livre'
+                    ? (statusTermoNormalizado === 'pendente'
                         ? `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`
-                        : armario.termoStatus === 'em andamento'
+                        : statusTermoNormalizado === 'em andamento'
                             ? `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`
                             : '')
                     : '';
@@ -4636,7 +4640,7 @@
                     <td>${armario.horaInicio || '-'}</td>
                     <td>${armario.whatsapp || '-'}</td>
                     <td>
-                        ${armario.status !== 'livre'
+                        ${statusArmarioNormalizado !== 'livre'
                             ? `<button class="btn-small btn-danger" data-action="liberar" data-id="${armario.id}" data-tipo="acompanhante">Liberar</button>
                                <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
                                ${botoesTermo}`
@@ -4720,7 +4724,11 @@
 
             const armariosComTermo = estado.armarios
                 .filter(a => normalizarTexto(a.tipo) === 'acompanhante')
-                .filter(a => a.status !== 'livre')
+                .filter(a => {
+                    const statusArmario = normalizarTexto(a.status);
+                    const statusTermo = normalizarTexto(a.termoStatus);
+                    return statusArmario !== 'livre' || statusTermo === 'finalizado';
+                })
                 .sort((a, b) => {
                     const peso = (valor) => {
                         if (!valor.termoInfo) return 0;
@@ -4743,10 +4751,9 @@
 
             for (const armario of armariosComTermo) {
                 const termoInfo = armario.termoInfo || null;
-                const possuiTermo = Boolean(termoInfo);
                 const statusTermoNormalizado = normalizarTexto(armario.termoStatus);
                 const finalizado = statusTermoNormalizado === 'finalizado';
-                const emAndamento = statusTermoNormalizado === 'em andamento' || (possuiTermo && !finalizado);
+                const emAndamento = statusTermoNormalizado === 'em andamento';
                 const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
                 if (estado.carregamentoTermosId !== carregamentoId) return;
 
@@ -4754,24 +4761,25 @@
                 const aplicadoEm = finalizado
                     ? formatarData(termoInfo?.finalizadoEm || termoInfo?.aplicadoEm)
                     : termoInfo?.aplicadoEm ? formatarData(termoInfo.aplicadoEm) : '-';
-                const statusClasse = !possuiTermo ? 'pendente' : finalizado ? 'aplicado' : emAndamento ? 'andamento' : 'pendente';
-                const statusTexto = !possuiTermo ? 'Pendente' : formatarStatusTermo(armario.termoStatus);
-                const pdfColuna = finalizado
+                const statusClasse = finalizado ? 'aplicado' : emAndamento ? 'andamento' : 'pendente';
+                const statusTexto = finalizado ? 'Finalizado' : emAndamento ? 'Em andamento' : 'Pendente';
+                const pdfDisponivel = finalizado && termoInfo?.pdfUrl;
+                const pdfColuna = pdfDisponivel
                     ? `<a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a>`
                     : '<span class="text-muted">Indisponível</span>';
-                const botoesAcao = !possuiTermo
+                const botoesAcao = finalizado
                     ? `
-                        <button class="btn-small btn-primary" data-action="aplicar" data-id="${armario.id}">Aplicar termo</button>
-                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
-                        <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
-                    `
-                    : finalizado
-                        ? `
                         <button class="btn-small btn-primary" data-action="ver" data-id="${armario.id}">Ver termo</button>
                         <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
                     `
-                        : `
+                    : emAndamento
+                        ? `
                         <button class="btn-small btn-primary" data-action="continuar" data-id="${armario.id}">Continuar termo</button>
+                        <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
+                        <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
+                    `
+                        : `
+                        <button class="btn-small btn-primary" data-action="aplicar" data-id="${armario.id}">Aplicar termo</button>
                         <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
                         <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
                     `;
