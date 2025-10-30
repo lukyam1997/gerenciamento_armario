@@ -442,6 +442,37 @@ function inicializarPlanilha() {
   }
 }
 
+function obterFusoHorarioPadrao() {
+  var timezone = '';
+  try {
+    timezone = Session.getScriptTimeZone();
+  } catch (erro) {
+    timezone = '';
+  }
+  return timezone || 'America/Sao_Paulo';
+}
+
+function formatarDataPlanilha(valor) {
+  if (!valor) {
+    return '';
+  }
+  if (Object.prototype.toString.call(valor) === '[object Date]' && !isNaN(valor.getTime())) {
+    return Utilities.formatDate(valor, obterFusoHorarioPadrao(), 'dd/MM/yyyy');
+  }
+  return valor;
+}
+
+function formatarHorarioPlanilha(valor) {
+  if (!valor) {
+    return '';
+  }
+  if (Object.prototype.toString.call(valor) === '[object Date]' && !isNaN(valor.getTime())) {
+    var formato = valor.getFullYear() <= 1900 ? 'HH:mm' : 'dd/MM/yyyy HH:mm';
+    return Utilities.formatDate(valor, obterFusoHorarioPadrao(), formato);
+  }
+  return valor;
+}
+
 // Adicionar dados iniciais de exemplo
 function adicionarDadosIniciais() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -724,7 +755,7 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
       nomePaciente: row[pacienteIndex] || '',
       leito: row[leitoIndex] || '',
       volumes: row[volumesIndex] || 0,
-      horaInicio: row[horaInicioIndex] || '',
+      horaInicio: formatarHorarioPlanilha(row[horaInicioIndex]),
       tipo: tipo,
       unidade: unidadeIndex !== null && unidadeIndex !== undefined ? (row[unidadeIndex] || '') : '',
       termoAplicado: termoIndex !== null && termoIndex !== undefined ? converterParaBoolean(row[termoIndex]) : false,
@@ -732,10 +763,10 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
     };
 
     if (isVisitante) {
-      armario.horaPrevista = horaPrevistaIndex > -1 ? (row[horaPrevistaIndex] || '') : '';
-      armario.dataRegistro = dataRegistroIndex > -1 ? (row[dataRegistroIndex] || '') : '';
+      armario.horaPrevista = horaPrevistaIndex > -1 ? formatarHorarioPlanilha(row[horaPrevistaIndex]) : '';
+      armario.dataRegistro = dataRegistroIndex > -1 ? formatarDataPlanilha(row[dataRegistroIndex]) : '';
     } else {
-      armario.dataRegistro = dataRegistroIndex > -1 ? (row[dataRegistroIndex] || '') : '';
+      armario.dataRegistro = dataRegistroIndex > -1 ? formatarDataPlanilha(row[dataRegistroIndex]) : '';
     }
 
     var volumesNumero = parseInt(armario.volumes, 10);
@@ -1432,14 +1463,14 @@ function getHistorico(tipo) {
       if (row[0]) {
         historico.push({
           id: row[0],
-          data: row[1],
+          data: formatarDataPlanilha(row[1]),
           armario: row[2],
           nome: row[3],
           paciente: row[4],
           leito: row[5],
           volumes: row[6],
-          horaInicio: row[7],
-          horaFim: row[8],
+          horaInicio: formatarHorarioPlanilha(row[7]),
+          horaFim: formatarHorarioPlanilha(row[8]),
           status: row[9],
           tipo: row[10],
           unidade: row[11],
