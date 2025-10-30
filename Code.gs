@@ -2117,9 +2117,11 @@ function salvarTermoCompleto(dadosTermo) {
 
     var sheetAcompanhantes = ss.getSheetByName('Acompanhantes');
     var dadosAcompanhantes = [];
+    var estruturaAcompanhantes = null;
     var linhaAcompanhante = -1;
 
     if (sheetAcompanhantes) {
+      estruturaAcompanhantes = obterEstruturaPlanilha(sheetAcompanhantes);
       dadosAcompanhantes = sheetAcompanhantes.getDataRange().getValues();
       for (var indiceA = 1; indiceA < dadosAcompanhantes.length; indiceA++) {
         var linha = dadosAcompanhantes[indiceA];
@@ -2185,9 +2187,79 @@ function salvarTermoCompleto(dadosTermo) {
     sheet.getRange(linhaExistente, 1, 1, linhaDados.length).setValues([linhaDados]);
 
     // 2. Atualizar status do armário na aba "Acompanhantes"
-    if (linhaAcompanhante > -1 && sheetAcompanhantes) {
-      sheetAcompanhantes.getRange(linhaAcompanhante + 1, 7).setValue(totalVolumes);
-      sheetAcompanhantes.getRange(linhaAcompanhante + 1, 12).setValue(true);
+    var cadastroArmario = dadosTermo.cadastroArmario;
+    if (typeof cadastroArmario === 'string' && cadastroArmario) {
+      try {
+        cadastroArmario = JSON.parse(cadastroArmario);
+      } catch (erroCadastro) {
+        cadastroArmario = null;
+      }
+    }
+
+    var precisaAtualizarCadastro = cadastroArmario && String(cadastroArmario.id) === String(dadosTermo.armarioId);
+
+    if (linhaAcompanhante > -1 && sheetAcompanhantes && estruturaAcompanhantes) {
+      var totalColunasAcompanhantes = estruturaAcompanhantes.ultimaColuna || 12;
+      var linhaAtualizada = dadosAcompanhantes[linhaAcompanhante] ? dadosAcompanhantes[linhaAcompanhante].slice() : [];
+
+      while (linhaAtualizada.length < totalColunasAcompanhantes) {
+        linhaAtualizada.push('');
+      }
+
+      definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'volumes', totalVolumes);
+      definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'termo aplicado', true);
+
+      if (precisaAtualizarCadastro) {
+        var statusAtual = normalizarTextoBasico(obterValorLinha(linhaAtualizada, estruturaAcompanhantes, 'status', ''));
+        if (statusAtual && statusAtual !== 'livre') {
+          throw new Error('Armário já está em uso. Atualize a lista e tente novamente.');
+        }
+
+        var dataHoraAtualCadastro = obterDataHoraAtualFormatada();
+        var horaInicioCadastro = dataHoraAtualCadastro.horaCurta;
+        var dataRegistroCadastro = dataHoraAtualCadastro.dataHoraIso;
+        var unidadeAtual = obterValorLinha(linhaAtualizada, estruturaAcompanhantes, 'unidade', '');
+        var whatsappCadastro = cadastroArmario.whatsapp ? cadastroArmario.whatsapp.toString().trim() : '';
+        var nomeColunaCadastro = 'nome acompanhante';
+
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'status', 'em-uso');
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, nomeColunaCadastro, cadastroArmario.nomeVisitante || dadosTermo.acompanhante || '');
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'nome paciente', cadastroArmario.nomePaciente || dadosTermo.paciente || '');
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'leito', cadastroArmario.leito || dadosTermo.leito || '');
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'hora inicio', horaInicioCadastro);
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'hora prevista', '');
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'data registro', dataRegistroCadastro);
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'whatsapp', whatsappCadastro);
+
+        // Registrar histórico de uso
+        var historicoSheet = ss.getSheetByName('Histórico Acompanhantes');
+        if (historicoSheet) {
+          var historicoLastRow = historicoSheet.getLastRow();
+          var historicoId = historicoLastRow > 1
+            ? Math.max.apply(null, historicoSheet.getRange(2, 1, historicoLastRow - 1, 1).getValues().flat()) + 1
+            : 1;
+
+          var historicoLinha = [
+            historicoId,
+            dataRegistroCadastro,
+            numeroArmarioOficial,
+            cadastroArmario.nomeVisitante || dadosTermo.acompanhante || '',
+            cadastroArmario.nomePaciente || dadosTermo.paciente || '',
+            cadastroArmario.leito || dadosTermo.leito || '',
+            totalVolumes,
+            horaInicioCadastro,
+            '',
+            'EM USO',
+            'acompanhante',
+            unidadeAtual,
+            whatsappCadastro
+          ];
+
+          historicoSheet.getRange(historicoLastRow + 1, 1, 1, historicoLinha.length).setValues([historicoLinha]);
+        }
+      }
+
+      sheetAcompanhantes.getRange(linhaAcompanhante + 1, 1, 1, totalColunasAcompanhantes).setValues([linhaAtualizada]);
     }
 
     limparCacheTermos();
