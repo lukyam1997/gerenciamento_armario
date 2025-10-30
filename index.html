@@ -4370,7 +4370,7 @@
                         ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão:</strong> ${armario.horaPrevista}</p>` : ''}
-                        ${armario.tipo === 'acompanhante' ? `<p><strong>Termo:</strong> ${armario.termoInfo ? (armario.termoFinalizado ? 'Finalizado' : 'Em andamento') : 'Pendente'}</p>` : ''}
+                        ${armario.tipo === 'acompanhante' ? `<p><strong>Termo:</strong> ${formatarStatusTermo(armario.termoStatus)}</p>` : ''}
                     `;
                 }
                 card.innerHTML = `
@@ -4485,6 +4485,10 @@
                     atualizacoes.termoAplicado = false;
                     precisaAtualizar = true;
                 }
+                if (armario.termoStatus !== 'finalizado') {
+                    atualizacoes.termoStatus = 'finalizado';
+                    precisaAtualizar = true;
+                }
             }
 
             if (armario.tipo === 'acompanhante' && armario.termoInfo) {
@@ -4503,6 +4507,10 @@
 
                 if (metodo === 'cpf' && confirmacao && termoAtualizado.cpfConfirmacao !== confirmacao) {
                     termoAtualizado.cpfConfirmacao = confirmacao;
+                    atualizouTermo = true;
+                }
+                if (normalizarTexto(termoAtualizado.status) !== 'finalizado') {
+                    termoAtualizado.status = 'Finalizado';
                     atualizouTermo = true;
                 }
 
@@ -4611,7 +4619,11 @@
             armariosAcompanhantes.forEach(armario => {
                 const tr = document.createElement('tr');
                 const botoesTermo = armario.status !== 'livre'
-                    ? `${armario.termoInfo ? (armario.termoFinalizado ? '' : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`) : `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`}`
+                    ? (armario.termoStatus === 'pendente'
+                        ? `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`
+                        : armario.termoStatus === 'em andamento'
+                            ? `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`
+                            : '')
                     : '';
                 tr.innerHTML = `
                     <td>${armario.numero}</td>
@@ -4712,7 +4724,7 @@
                 .sort((a, b) => {
                     const peso = (valor) => {
                         if (!valor.termoInfo) return 0;
-                        return valor.termoFinalizado ? 2 : 1;
+                        return valor.termoStatus === 'finalizado' ? 2 : 1;
                     };
                     const pesoA = peso(a);
                     const pesoB = peso(b);
@@ -4732,7 +4744,9 @@
             for (const armario of armariosComTermo) {
                 const termoInfo = armario.termoInfo || null;
                 const possuiTermo = Boolean(termoInfo);
-                const finalizado = Boolean(armario.termoFinalizado);
+                const statusTermoNormalizado = normalizarTexto(armario.termoStatus);
+                const finalizado = statusTermoNormalizado === 'finalizado';
+                const emAndamento = statusTermoNormalizado === 'em andamento' || (possuiTermo && !finalizado);
                 const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
                 if (estado.carregamentoTermosId !== carregamentoId) return;
 
@@ -4740,8 +4754,8 @@
                 const aplicadoEm = finalizado
                     ? formatarData(termoInfo?.finalizadoEm || termoInfo?.aplicadoEm)
                     : termoInfo?.aplicadoEm ? formatarData(termoInfo.aplicadoEm) : '-';
-                const statusClasse = !possuiTermo ? 'pendente' : finalizado ? 'aplicado' : 'andamento';
-                const statusTexto = !possuiTermo ? 'Pendente' : finalizado ? 'Finalizado' : 'Em andamento';
+                const statusClasse = !possuiTermo ? 'pendente' : finalizado ? 'aplicado' : emAndamento ? 'andamento' : 'pendente';
+                const statusTexto = !possuiTermo ? 'Pendente' : formatarStatusTermo(armario.termoStatus);
                 const pdfColuna = finalizado
                     ? `<a href="#" class="btn-small btn-primary" data-action="ver-pdf" data-id="${armario.id}">Ver PDF</a>`
                     : '<span class="text-muted">Indisponível</span>';
@@ -5175,12 +5189,17 @@
                 elementos.armarioForm.dataset.numero = armario.numero;
                 elementos.armarioModal.style.display = 'flex';
             } else {
-                const termoStatusTexto = armario.termoInfo
-                    ? (armario.termoFinalizado ? 'Finalizado' : 'Em andamento')
-                    : 'Pendente';
-                const termoAviso = armario.termoInfo && !armario.termoFinalizado
-                    ? '<br><small>Finalize o termo antes da liberação do armário.</small>'
-                    : (!armario.termoInfo ? '<br><small>Finalize o termo antes da primeira movimentação.</small>' : '');
+                const termoStatusNormalizado = normalizarTexto(armario.termoStatus);
+                const termoStatusTexto = formatarStatusTermo(armario.termoStatus);
+                const termoPendente = termoStatusNormalizado === 'pendente';
+                const termoEmAndamento = termoStatusNormalizado === 'em andamento';
+                const termoAviso = armario.tipo === 'acompanhante'
+                    ? (termoEmAndamento
+                        ? '<br><small>Finalize o termo antes da liberação do armário.</small>'
+                        : termoPendente
+                            ? '<br><small>Finalize o termo antes da primeira movimentação.</small>'
+                            : '')
+                    : '';
                 const termoHtml = armario.tipo === 'acompanhante'
                     ? `<div class="info-box" style="margin-top:12px;">Termo de responsabilidade: <strong>${termoStatusTexto}</strong>${termoAviso}</div>`
                     : '';
@@ -5200,7 +5219,7 @@
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão de saída:</strong> ${armario.horaPrevista}</p>` : ''}
                         ${termoHtml}
-                        ${armario.tipo === 'acompanhante' && (!armario.termoInfo || !armario.termoFinalizado) ? `<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">${armario.termoInfo ? 'Continuar termo' : 'Aplicar termo agora'}</button></div>` : ''}
+                        ${armario.tipo === 'acompanhante' && (termoPendente || termoEmAndamento) ? `<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">${termoEmAndamento ? 'Continuar termo' : 'Aplicar termo agora'}</button></div>` : ''}
                     `,
                     icon: 'info',
                     showCancelButton: true,
@@ -5211,7 +5230,7 @@
                     confirmButtonColor: '#28a745',
                     reverseButtons: true,
                     didOpen: () => {
-                        if (armario.tipo === 'acompanhante' && (!armario.termoInfo || !armario.termoFinalizado)) {
+                        if (armario.tipo === 'acompanhante' && (termoPendente || termoEmAndamento)) {
                             const btn = Swal.getHtmlContainer().querySelector('#btn-aplicar-termo');
                             if (btn) {
                                 btn.addEventListener('click', async () => {
@@ -5523,6 +5542,16 @@
                 default:
                     return 'Livre';
             }
+        }
+        function formatarStatusTermo(status) {
+            const normalizado = normalizarTexto(status);
+            if (normalizado === 'finalizado') {
+                return 'Finalizado';
+            }
+            if (normalizado === 'em andamento') {
+                return 'Em andamento';
+            }
+            return 'Pendente';
         }
         function formatarData(valor) {
             if (!valor) return '-';
