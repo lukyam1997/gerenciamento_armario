@@ -600,6 +600,26 @@ function formatarHorarioPlanilha(valor) {
   return valor;
 }
 
+function obterDataHoraAtualFormatada() {
+  var agora = new Date();
+  var timezone = obterFusoHorarioPadrao();
+  return {
+    data: agora,
+    horaCurta: Utilities.formatDate(agora, timezone, 'HH:mm'),
+    dataHoraIso: Utilities.formatDate(agora, timezone, "yyyy-MM-dd'T'HH:mm:ss")
+  };
+}
+
+function converterParaDataHoraIso(valor, padrao) {
+  if (Object.prototype.toString.call(valor) === '[object Date]' && !isNaN(valor.getTime())) {
+    return Utilities.formatDate(valor, obterFusoHorarioPadrao(), "yyyy-MM-dd'T'HH:mm:ss");
+  }
+  if (valor && typeof valor === 'string') {
+    return valor;
+  }
+  return padrao !== undefined ? padrao : '';
+}
+
 // Adicionar dados iniciais de exemplo
 function adicionarDadosIniciais() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -607,14 +627,15 @@ function adicionarDadosIniciais() {
   // Cadastrar alguns armários físicos
   var cadastroSheet = ss.getSheetByName('Cadastro Armários');
   if (cadastroSheet.getLastRow() === 1) {
+    var dataCadastroArmarios = obterDataHoraAtualFormatada().dataHoraIso;
     var armariosIniciais = [
-      ['V-01', 'visitante', 'NAC Eletiva', 'Bloco A - Térreo', 'ativo', new Date()],
-      ['V-02', 'visitante', 'NAC Eletiva', 'Bloco A - Térreo', 'ativo', new Date()],
-      ['V-03', 'visitante', 'UIB', 'Bloco A - Térreo', 'ativo', new Date()],
-      ['V-04', 'visitante', 'UIB', 'Bloco A - Térreo', 'ativo', new Date()],
-      ['A-01', 'acompanhante', 'NAC Eletiva', 'Bloco B - 1º Andar', 'ativo', new Date()],
-      ['A-02', 'acompanhante', 'UIB', 'Bloco B - 1º Andar', 'ativo', new Date()],
-      ['A-03', 'acompanhante', 'UIB', 'Bloco B - 1º Andar', 'ativo', new Date()]
+      ['V-01', 'visitante', 'NAC Eletiva', 'Bloco A - Térreo', 'ativo', dataCadastroArmarios],
+      ['V-02', 'visitante', 'NAC Eletiva', 'Bloco A - Térreo', 'ativo', dataCadastroArmarios],
+      ['V-03', 'visitante', 'UIB', 'Bloco A - Térreo', 'ativo', dataCadastroArmarios],
+      ['V-04', 'visitante', 'UIB', 'Bloco A - Térreo', 'ativo', dataCadastroArmarios],
+      ['A-01', 'acompanhante', 'NAC Eletiva', 'Bloco B - 1º Andar', 'ativo', dataCadastroArmarios],
+      ['A-02', 'acompanhante', 'UIB', 'Bloco B - 1º Andar', 'ativo', dataCadastroArmarios],
+      ['A-03', 'acompanhante', 'UIB', 'Bloco B - 1º Andar', 'ativo', dataCadastroArmarios]
     ];
 
     armariosIniciais.forEach(function(armario, index) {
@@ -628,16 +649,18 @@ function adicionarDadosIniciais() {
   // Cadastrar usuário admin inicial
   var usuariosSheet = ss.getSheetByName('Usuários');
   if (usuariosSheet.getLastRow() === 1) {
+    var dataCadastroUsuario = obterDataHoraAtualFormatada().dataHoraIso;
     usuariosSheet.getRange(2, 1, 1, 10)
-      .setValues([[1, 'Administrador', 'admin', 'admin', true, true, new Date(), 'ativo', 'admin123', 'all']]);
+      .setValues([[1, 'Administrador', 'admin', 'admin', true, true, dataCadastroUsuario, 'ativo', 'admin123', 'all']]);
   }
 
   // Cadastrar unidades iniciais
   var unidadesSheet = ss.getSheetByName('Unidades');
   if (unidadesSheet && unidadesSheet.getLastRow() === 1) {
+    var dataCadastroUnidades = obterDataHoraAtualFormatada().dataHoraIso;
     var unidadesIniciais = [
-      [1, 'NAC Eletiva', 'ativa', new Date()],
-      [2, 'UIB', 'ativa', new Date()]
+      [1, 'NAC Eletiva', 'ativa', dataCadastroUnidades],
+      [2, 'UIB', 'ativa', dataCadastroUnidades]
     ];
     unidadesSheet.getRange(2, 1, unidadesIniciais.length, 4).setValues(unidadesIniciais);
   }
@@ -1022,13 +1045,16 @@ function cadastrarArmario(armarioData) {
       return { success: false, error: 'Armário já está em uso' };
     }
 
-    var agora = new Date();
-    var horaInicio = agora.toLocaleTimeString('pt-BR');
+    var dataHoraAtual = obterDataHoraAtualFormatada();
+    var horaInicio = dataHoraAtual.horaCurta;
+    var dataRegistro = dataHoraAtual.dataHoraIso;
     var volumes = parseInt(armarioData.volumes, 10);
     if (isNaN(volumes) || volumes < 0) {
       volumes = 0;
     }
-    var whatsapp = armarioData.whatsapp || '';
+    var whatsapp = armarioData.whatsapp !== null && armarioData.whatsapp !== undefined
+      ? armarioData.whatsapp.toString().trim()
+      : '';
     var numeroArmario = linhaAtual[numeroIndex];
     var unidadeAtual = obterValorLinha(linhaAtual, estrutura, 'unidade', '');
     var novaLinha = linhaAtual.slice();
@@ -1048,7 +1074,7 @@ function cadastrarArmario(armarioData) {
     } else {
       definirValorLinha(novaLinha, estrutura, 'hora prevista', '');
     }
-    definirValorLinha(novaLinha, estrutura, 'data registro', agora);
+    definirValorLinha(novaLinha, estrutura, 'data registro', dataRegistro);
     definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
     definirValorLinha(novaLinha, estrutura, 'whatsapp', whatsapp);
     definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
@@ -1058,9 +1084,11 @@ function cadastrarArmario(armarioData) {
     var historicoLastRow = historicoSheet.getLastRow();
     var historicoId = historicoLastRow > 1 ? Math.max(...historicoSheet.getRange(2, 1, historicoLastRow - 1, 1).getValues().flat()) + 1 : 1;
 
+    var dataHistorico = dataHoraAtual.dataHoraIso;
+
     var historicoLinha = [
       historicoId,
-      new Date(),
+      dataHistorico,
       numeroArmario,
       armarioData.nomeVisitante,
       armarioData.nomePaciente,
@@ -1112,7 +1140,11 @@ function liberarArmario(id, tipo) {
     // Encontrar o armário na aba atual
     var estrutura = obterEstruturaPlanilha(sheet);
     var totalColunas = estrutura.ultimaColuna || (sheetName === 'Visitantes' ? 13 : 12);
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, totalColunas).getValues();
+    var totalLinhas = sheet.getLastRow();
+    if (totalLinhas <= 1) {
+      return { success: false, error: 'Nenhum armário cadastrado' };
+    }
+    var data = sheet.getRange(2, 1, totalLinhas - 1, totalColunas).getValues();
     var armarioIndex = -1;
     var armarioData = null;
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
@@ -1147,7 +1179,8 @@ function liberarArmario(id, tipo) {
     if (sheetName === 'Visitantes') {
       definirValorLinha(novaLinha, estrutura, 'hora prevista', '');
     }
-    definirValorLinha(novaLinha, estrutura, 'data registro', new Date());
+    var dataHoraAtual = obterDataHoraAtualFormatada();
+    definirValorLinha(novaLinha, estrutura, 'data registro', dataHoraAtual.dataHoraIso);
     definirValorLinha(novaLinha, estrutura, 'whatsapp', '');
     definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
     definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
@@ -1155,7 +1188,10 @@ function liberarArmario(id, tipo) {
     sheet.getRange(linha, 1, 1, totalColunas).setValues([novaLinha]);
 
     // Atualizar histórico - encontrar a entrada mais recente deste armário
-    var historicoData = historicoSheet.getRange(2, 1, historicoSheet.getLastRow()-1, 13).getValues();
+    var historicoLastRow = historicoSheet.getLastRow();
+    var historicoData = historicoLastRow > 1
+      ? historicoSheet.getRange(2, 1, historicoLastRow - 1, 13).getValues()
+      : [];
     var historicoIndex = -1;
     var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
     var numeroArmario = obterValorLinha(armarioData, estrutura, 'numero', armarioData[numeroIndex]);
@@ -1166,11 +1202,11 @@ function liberarArmario(id, tipo) {
         break;
       }
     }
-    
+
     if (historicoIndex !== -1) {
       var historicoLinha = historicoIndex + 2;
-      var agora = new Date();
-      historicoSheet.getRange(historicoLinha, 9).setValue(agora.toLocaleTimeString('pt-BR')); // Hora fim
+      var horaFim = dataHoraAtual.horaCurta;
+      historicoSheet.getRange(historicoLinha, 9).setValue(horaFim); // Hora fim
       historicoSheet.getRange(historicoLinha, 10).setValue('FINALIZADO'); // Status
     }
     
@@ -1315,7 +1351,7 @@ function cadastrarUsuario(dados) {
 
     var acessoVisitantes = converterParaBoolean(dados.acessoVisitantes);
     var acessoAcompanhantes = converterParaBoolean(dados.acessoAcompanhantes);
-    var dataCadastro = new Date();
+    var dataCadastro = obterDataHoraAtualFormatada().dataHoraIso;
 
     var novaLinha = new Array(totalColunas);
     for (var i = 0; i < totalColunas; i++) {
@@ -1750,6 +1786,7 @@ function cadastrarArmarioFisico(armarioData) {
     var lastRow = sheet.getLastRow();
     var ultimoId = lastRow > 1 ? Math.max.apply(null, sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) : 0;
 
+    var dataCadastro = obterDataHoraAtualFormatada().dataHoraIso;
     var linhas = novosArmarios.map(function(numero, index) {
       return [
         ultimoId + index + 1,
@@ -1758,7 +1795,7 @@ function cadastrarArmarioFisico(armarioData) {
         armarioData.unidade,
         armarioData.localizacao,
         'ativo',
-        new Date()
+        dataCadastro
       ];
     });
 
@@ -1794,12 +1831,13 @@ function criarArmariosUso(armarios) {
     armarios.forEach(function(armario) {
       var sheetName = armario[2] === 'visitante' ? 'Visitantes' : 'Acompanhantes';
       var sheet = ss.getSheetByName(sheetName);
-      
+
       if (sheet) {
         var lastRow = sheet.getLastRow();
         var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
-        
+
         var novaLinha;
+        var dataRegistro = obterDataHoraAtualFormatada().dataHoraIso;
 
         if (armario[2] === 'visitante') {
           novaLinha = [
@@ -1812,7 +1850,7 @@ function criarArmariosUso(armarios) {
             0, // volumes
             '', // hora início
             '', // hora prevista
-            new Date(), // data registro
+            dataRegistro, // data registro
             armario[3], // unidade
             false, // termo aplicado
             '' // WhatsApp
@@ -1827,7 +1865,7 @@ function criarArmariosUso(armarios) {
             '', // leito
             0, // volumes
             '', // hora início
-            new Date(), // data registro
+            dataRegistro, // data registro
             '', // WhatsApp
             armario[3], // unidade
             false // termo aplicado
@@ -1897,11 +1935,13 @@ function cadastrarUnidade(dados) {
     var lastRow = sheet.getLastRow();
     var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
     
+    var dataCadastro = obterDataHoraAtualFormatada().dataHoraIso;
+
     var novaLinha = [
       novoId,
       dados.nome,
       'ativa',
-      new Date()
+      dataCadastro
     ];
     
     sheet.getRange(lastRow + 1, 1, 1, 4).setValues([novaLinha]);
@@ -2029,14 +2069,15 @@ function salvarTermoCompleto(dadosTermo) {
     var dadosExistentes = sheet.getDataRange().getValues();
     var linhaExistente = -1;
     var termoId = null;
-    var aplicadoEm = new Date();
+    var aplicadoEmAtual = obterDataHoraAtualFormatada().dataHoraIso;
+    var aplicadoEm = aplicadoEmAtual;
 
     for (var i = dadosExistentes.length - 1; i >= 1; i--) {
       if (dadosExistentes[i][1] == dadosTermo.armarioId) {
         if (!dadosExistentes[i][17]) { // Termo ainda não finalizado
           linhaExistente = i + 1;
           termoId = dadosExistentes[i][0];
-          aplicadoEm = dadosExistentes[i][16] || new Date();
+          aplicadoEm = converterParaDataHoraIso(dadosExistentes[i][16], aplicadoEmAtual);
           break;
         }
       }
@@ -2385,10 +2426,11 @@ function finalizarTermo(dados) {
     }
 
     var assinaturas = termoEncontrado.assinaturas || normalizarAssinaturas('');
-    var agora = new Date();
+    var finalizacaoInfo = obterDataHoraAtualFormatada();
+    var finalizacaoIso = finalizacaoInfo.dataHoraIso;
     assinaturas.metodoFinal = metodo;
     assinaturas.cpfFinal = metodo === 'cpf' ? confirmacao : '';
-    assinaturas.finalizadoEm = agora;
+    assinaturas.finalizadoEm = finalizacaoIso;
     assinaturas.final = metodo === 'assinatura' ? assinaturaFinal : '';
 
     var movimentacoesResultado = getMovimentacoes({ armarioId: armarioId });
@@ -2417,7 +2459,7 @@ function finalizarTermo(dados) {
       volumes: termoEncontrado.volumes,
       descricaoVolumes: termoEncontrado.descricaoVolumes,
       aplicadoEm: termoEncontrado.aplicadoEm,
-      finalizadoEm: agora,
+      finalizadoEm: finalizacaoIso,
       assinaturaInicial: assinaturas.inicial,
       assinaturaFinal: assinaturas.final,
       metodoFinal: assinaturas.metodoFinal,
@@ -2444,7 +2486,7 @@ function finalizarTermo(dados) {
     return {
       success: true,
       pdfUrl: resultadoPDF.pdfUrl,
-      finalizadoEm: agora
+      finalizadoEm: finalizacaoIso
     };
 
   } catch (error) {
@@ -2755,6 +2797,8 @@ function salvarMovimentacao(dados) {
     var lastRow = sheet.getLastRow();
     var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
     
+    var registroMovimento = obterDataHoraAtualFormatada().dataHoraIso;
+
     var novaLinha = [
       novoId,
       dados.armarioId,
@@ -2764,7 +2808,7 @@ function salvarMovimentacao(dados) {
       dados.responsavel,
       dados.data,
       dados.hora,
-      new Date()
+      registroMovimento
     ];
     
     sheet.getRange(lastRow + 1, 1, 1, 9).setValues([novaLinha]);
@@ -2793,8 +2837,10 @@ function registrarLog(acao, detalhes) {
     
     var lastRow = sheet.getLastRow();
     
+    var dataLog = obterDataHoraAtualFormatada().dataHoraIso;
+
     var novaLinha = [
-      new Date(),
+      dataLog,
       Session.getEffectiveUser().getEmail(),
       acao,
       detalhes,
