@@ -3488,6 +3488,8 @@
         const termoSteps = Array.from(document.querySelectorAll('#termo-form .wizard-step'));
         let termoPassoAtual = 0;
         let termoArmarioAtual = null;
+        let termoPreCadastro = null;
+        let termoCadastroArmario = null;
         let movimentacaoArmarioAtual = null;
         let liberacaoArmarioAtual = null;
         let liberacaoTipoAtual = 'acompanhante';
@@ -4625,9 +4627,7 @@
                 const botoesTermo = statusArmarioNormalizado !== 'livre'
                     ? (statusTermoNormalizado === 'pendente'
                         ? `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Aplicar termo</button>`
-                        : statusTermoNormalizado === 'em andamento'
-                            ? `<button class="btn-small btn-primary" data-action="termo" data-id="${armario.id}">Continuar termo</button>`
-                            : '')
+                        : '')
                     : '';
                 tr.innerHTML = `
                     <td>${armario.numero}</td>
@@ -4774,7 +4774,7 @@
                     `
                     : emAndamento
                         ? `
-                        <button class="btn-small btn-primary" data-action="continuar" data-id="${armario.id}">Continuar termo</button>
+                        <button class="btn-small btn-primary" data-action="ver" data-id="${armario.id}">Ver termo</button>
                         <button class="btn-small btn-edit" data-action="mov" data-id="${armario.id}">Movimentações</button>
                         <button class="btn-small btn-danger" data-action="encerrar" data-id="${armario.id}">Encerrar</button>
                     `
@@ -5203,9 +5203,9 @@
                 const termoEmAndamento = termoStatusNormalizado === 'em andamento';
                 const termoAviso = armario.tipo === 'acompanhante'
                     ? (termoEmAndamento
-                        ? '<br><small>Finalize o termo antes da liberação do armário.</small>'
+                        ? '<br><small>Finalize o termo durante a liberação do armário.</small>'
                         : termoPendente
-                            ? '<br><small>Finalize o termo antes da primeira movimentação.</small>'
+                            ? '<br><small>Preencha o termo para ocupar este armário.</small>'
                             : '')
                     : '';
                 const termoHtml = armario.tipo === 'acompanhante'
@@ -5227,7 +5227,7 @@
                         <p><strong>Início:</strong> ${armario.horaInicio}</p>
                         ${armario.horaPrevista ? `<p><strong>Previsão de saída:</strong> ${armario.horaPrevista}</p>` : ''}
                         ${termoHtml}
-                        ${armario.tipo === 'acompanhante' && (termoPendente || termoEmAndamento) ? `<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">${termoEmAndamento ? 'Continuar termo' : 'Aplicar termo agora'}</button></div>` : ''}
+                        ${armario.tipo === 'acompanhante' && termoPendente ? `<div style="margin-top:16px;"><button id="btn-aplicar-termo" class="swal2-confirm swal2-styled" style="background-color:#2c6e8f;">Aplicar termo agora</button></div>` : ''}
                     `,
                     icon: 'info',
                     showCancelButton: true,
@@ -5464,22 +5464,44 @@
                     horaPrevista: tipo === 'visitante' ? document.getElementById('hora-prevista').value : '',
                     tipo: tipo
                 };
-                const resultado = await callGoogleScript('cadastrarArmario', dados);
-                if (resultado.success) {
+                if (tipo === 'acompanhante') {
+                    termoPreCadastro = {
+                        id,
+                        nomeVisitante: dados.nomeVisitante,
+                        nomePaciente: dados.nomePaciente,
+                        leito: dados.leito,
+                        volumes: volumesInformados,
+                        whatsapp: dados.whatsapp
+                    };
+                    termoCadastroArmario = {
+                        id,
+                        nomeVisitante: dados.nomeVisitante,
+                        nomePaciente: dados.nomePaciente,
+                        leito: dados.leito,
+                        whatsapp: dados.whatsapp
+                    };
                     fecharModalArmario();
-
-                    // Recarregar dados
-                    await carregarArmarios({ forcarAtualizacao: true });
-                    await carregarEstatisticas();
-                    atualizarInterface();
-                    carregarDadosTabelas();
-                    if (tipo === 'acompanhante') {
-                        await abrirTermoWizard(resultado.id);
-                    } else {
-                        mostrarSucesso('Armário cadastrado com sucesso');
+                    try {
+                        await abrirTermoWizard(id);
+                    } catch (erroTermo) {
+                        termoPreCadastro = null;
+                        termoCadastroArmario = null;
+                        notificarErroPadrao({ error: erroTermo.message || erroTermo.toString() });
                     }
                 } else {
-                    notificarErroPadrao(resultado);
+                    const resultado = await callGoogleScript('cadastrarArmario', dados);
+                    if (resultado.success) {
+                        fecharModalArmario();
+
+                        // Recarregar dados
+                        await carregarArmarios({ forcarAtualizacao: true });
+                        await carregarEstatisticas();
+                        atualizarInterface();
+                        carregarDadosTabelas();
+                        mostrarSucesso('Armário cadastrado com sucesso');
+                    } else {
+                        notificarErroPadrao(resultado);
+                    }
                 }
             } finally {
                 finalizarLoading();
@@ -5608,6 +5630,7 @@
             limparAssinaturaTermo(true);
 
             let termoDados = null;
+            const preCadastro = termoPreCadastro && Number(termoPreCadastro.id) === Number(id) ? termoPreCadastro : null;
             try {
                 const resposta = await callGoogleScript('getTermo', { armarioId: id });
                 if (resposta.success) {
@@ -5619,12 +5642,12 @@
                 console.warn('Falha ao carregar termo existente:', erro);
             }
 
-            document.getElementById('termo-paciente').value = termoDados?.paciente || armario.nomePaciente || '';
+            document.getElementById('termo-paciente').value = termoDados?.paciente || preCadastro?.nomePaciente || armario.nomePaciente || '';
             document.getElementById('termo-prontuario').value = termoDados?.prontuario || '';
             document.getElementById('termo-nascimento').value = termoDados?.nascimento ? termoDados.nascimento.slice(0, 10) : '';
             document.getElementById('termo-setor').value = termoDados?.setor || '';
-            document.getElementById('termo-leito').value = termoDados?.leito || armario.leito || '';
-            document.getElementById('termo-resp-nome').value = termoDados?.acompanhante || armario.nomeVisitante || '';
+            document.getElementById('termo-leito').value = termoDados?.leito || preCadastro?.leito || armario.leito || '';
+            document.getElementById('termo-resp-nome').value = termoDados?.acompanhante || preCadastro?.nomeVisitante || armario.nomeVisitante || '';
             document.getElementById('termo-resp-telefone').value = termoDados?.telefone || '';
             document.getElementById('termo-resp-doc').value = termoDados?.documento || '';
             document.getElementById('termo-resp-parentesco').value = termoDados?.parentesco || '';
@@ -5934,6 +5957,15 @@
                 descricaoVolumes: descricaoVolumes,
                 assinaturaBase64: assinaturaBase64
             };
+            if (termoCadastroArmario && Number(termoCadastroArmario.id) === Number(termoArmarioAtual)) {
+                dadosTermo.cadastroArmario = {
+                    id: termoCadastroArmario.id,
+                    nomeVisitante: dadosTermo.acompanhante,
+                    nomePaciente: dadosTermo.paciente,
+                    leito: dadosTermo.leito,
+                    whatsapp: termoCadastroArmario.whatsapp || ''
+                };
+            }
             const resultado = await callGoogleScript('salvarTermoCompleto', dadosTermo);
             if (resultado.success) {
                 fecharTermoModal();
@@ -5951,6 +5983,8 @@
         function fecharTermoModal() {
             elementos.termoModal.style.display = 'none';
             termoArmarioAtual = null;
+            termoPreCadastro = null;
+            termoCadastroArmario = null;
             mostrarPassoTermo(0);
             elementos.termoForm.reset();
             elementos.termoForm.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
