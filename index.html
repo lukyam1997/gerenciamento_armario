@@ -6312,9 +6312,20 @@
                     confirmacao
                 });
 
+                let mensagemSucesso = 'Termo finalizado e armário liberado com sucesso';
                 if (!resultadoFinalizacao.success) {
-                    notificarErroPadrao(resultadoFinalizacao, 'Não foi possível finalizar o termo.');
-                    return;
+                    const mensagemErro = (resultadoFinalizacao.error || '').toString();
+                    const erroNormalizado = mensagemErro.toLowerCase();
+                    const erroSemAcento = erroNormalizado.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const termoNaoEncontrado = erroNormalizado.includes('termo não localizado')
+                        || erroSemAcento.includes('termo nao localizado');
+
+                    if (!termoNaoEncontrado) {
+                        notificarErroPadrao(resultadoFinalizacao, 'Não foi possível finalizar o termo.');
+                        return;
+                    }
+
+                    mensagemSucesso = 'Armário liberado com sucesso. Termo não localizado para finalização.';
                 }
 
                 const resultado = await callGoogleScript('liberarArmario', {
@@ -6331,7 +6342,7 @@
                     atualizarResumoDashboardLocal();
                     atualizarInterface();
                     carregarDadosTabelas();
-                    mostrarSucesso('Termo finalizado e armário liberado com sucesso');
+                    mostrarSucesso(mensagemSucesso);
                 } else {
                     notificarErroPadrao(resultado);
                 }
