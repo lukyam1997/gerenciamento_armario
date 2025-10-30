@@ -2072,10 +2072,56 @@ function salvarTermoCompleto(dadosTermo) {
     var assinaturasInfo = normalizarAssinaturas(valorAtualAssinatura);
     assinaturasInfo.inicial = dadosTermo.assinaturaBase64 || assinaturasInfo.inicial || '';
 
+    var numeroArmarioOficial = dadosTermo.numeroArmario ? dadosTermo.numeroArmario.toString().trim() : '';
+
+    var sheetAcompanhantes = ss.getSheetByName('Acompanhantes');
+    var dadosAcompanhantes = [];
+    var linhaAcompanhante = -1;
+
+    if (sheetAcompanhantes) {
+      dadosAcompanhantes = sheetAcompanhantes.getDataRange().getValues();
+      for (var indiceA = 1; indiceA < dadosAcompanhantes.length; indiceA++) {
+        var linha = dadosAcompanhantes[indiceA];
+        if (linha && linha[0] == dadosTermo.armarioId) {
+          linhaAcompanhante = indiceA;
+          if (linha.length > 1 && linha[1]) {
+            numeroArmarioOficial = linha[1];
+          } else if (!numeroArmarioOficial) {
+            numeroArmarioOficial = dadosTermo.armarioId;
+          }
+          break;
+        }
+      }
+    }
+
+    if (linhaAcompanhante === -1) {
+      var sheetVisitantes = ss.getSheetByName('Visitantes');
+      if (sheetVisitantes) {
+        var dadosVisitantes = sheetVisitantes.getDataRange().getValues();
+        for (var indiceV = 1; indiceV < dadosVisitantes.length; indiceV++) {
+          var linhaVisitante = dadosVisitantes[indiceV];
+          if (linhaVisitante && linhaVisitante[0] == dadosTermo.armarioId) {
+            if (linhaVisitante.length > 1 && linhaVisitante[1]) {
+              numeroArmarioOficial = linhaVisitante[1];
+            } else if (!numeroArmarioOficial) {
+              numeroArmarioOficial = dadosTermo.armarioId;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (!numeroArmarioOficial) {
+      numeroArmarioOficial = dadosTermo.armarioId || '';
+    }
+
+    dadosTermo.numeroArmario = numeroArmarioOficial;
+
     var linhaDados = [
       termoId,
       dadosTermo.armarioId,
-      dadosTermo.numeroArmario,
+      numeroArmarioOficial,
       dadosTermo.paciente,
       dadosTermo.prontuario,
       dadosTermo.nascimento,
@@ -2098,16 +2144,9 @@ function salvarTermoCompleto(dadosTermo) {
     sheet.getRange(linhaExistente, 1, 1, linhaDados.length).setValues([linhaDados]);
 
     // 2. Atualizar status do armário na aba "Acompanhantes"
-    var sheetAcompanhantes = ss.getSheetByName('Acompanhantes');
-    var dataAcompanhantes = sheetAcompanhantes.getDataRange().getValues();
-
-    for (var i = 1; i < dataAcompanhantes.length; i++) {
-      if (dataAcompanhantes[i][0] == dadosTermo.armarioId) {
-        // Atualizar volumes e marcar termo como aplicado
-        sheetAcompanhantes.getRange(i + 1, 7).setValue(totalVolumes);
-        sheetAcompanhantes.getRange(i + 1, 12).setValue(true); // Termo iniciado
-        break;
-      }
+    if (linhaAcompanhante > -1 && sheetAcompanhantes) {
+      sheetAcompanhantes.getRange(linhaAcompanhante + 1, 7).setValue(totalVolumes);
+      sheetAcompanhantes.getRange(linhaAcompanhante + 1, 12).setValue(true);
     }
 
     limparCacheTermos();
