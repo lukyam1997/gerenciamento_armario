@@ -912,9 +912,31 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
     if (tipo === 'acompanhante') {
       var termoRelacionado = termosMap ? termosMap[armario.id] : null;
       if (termoRelacionado) {
-        var termoFinalizado = Boolean(termoRelacionado.pdfUrl || (termoRelacionado.assinaturas && termoRelacionado.assinaturas.finalizadoEm));
-        armario.termoAplicado = !termoFinalizado;
+        var statusTermoNormalizado = normalizarTextoBasico(termoRelacionado.status);
+        var termoFinalizado = statusTermoNormalizado === 'finalizado';
+
+        if (!termoFinalizado && (termoRelacionado.pdfUrl || (termoRelacionado.assinaturas && termoRelacionado.assinaturas.finalizadoEm))) {
+          termoFinalizado = true;
+          statusTermoNormalizado = 'finalizado';
+        }
+
+        var possuiTermo = Boolean(termoRelacionado);
+        var termoEmAndamento = possuiTermo && !termoFinalizado;
+        var statusDescricao = termoRelacionado.status || '';
+
+        if (!statusDescricao) {
+          statusDescricao = termoFinalizado ? 'Finalizado' : (possuiTermo ? 'Em andamento' : '');
+        } else if (statusTermoNormalizado === 'finalizado') {
+          statusDescricao = 'Finalizado';
+        } else if (statusTermoNormalizado === 'em andamento') {
+          statusDescricao = 'Em andamento';
+        }
+
+        var termoStatus = termoFinalizado ? 'finalizado' : (termoEmAndamento ? 'em andamento' : 'pendente');
+
+        armario.termoAplicado = termoEmAndamento;
         armario.termoFinalizado = termoFinalizado;
+        armario.termoStatus = termoStatus;
         armario.termoInfo = {
           id: termoRelacionado.id,
           aplicadoEm: termoRelacionado.aplicadoEm,
@@ -923,15 +945,17 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
           responsavel: termoRelacionado.acompanhante,
           metodoFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.metodoFinal : '',
           cpfFinal: termoRelacionado.assinaturas ? termoRelacionado.assinaturas.cpfFinal : '',
-          status: termoRelacionado.status || ''
+          status: statusDescricao
         };
       } else {
         armario.termoAplicado = false;
         armario.termoFinalizado = false;
+        armario.termoStatus = 'pendente';
         armario.termoInfo = null;
       }
     } else {
       armario.termoFinalizado = false;
+      armario.termoStatus = 'pendente';
       armario.termoInfo = null;
     }
 
