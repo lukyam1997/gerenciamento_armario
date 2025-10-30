@@ -1095,11 +1095,14 @@ function cadastrarArmario(armarioData) {
 
 function liberarArmario(id, tipo) {
   try {
+    var tipoNormalizado = normalizarTextoBasico(tipo);
+    var ehAcompanhante = tipoNormalizado === 'acompanhante';
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheetName = tipo === 'acompanhante' ? 'Acompanhantes' : 'Visitantes';
+    var sheetName = ehAcompanhante ? 'Acompanhantes' : 'Visitantes';
     var sheet = ss.getSheetByName(sheetName);
     var historicoSheet = ss.getSheetByName(
-      tipo === 'acompanhante' ? 'Histórico Acompanhantes' : 'Histórico Visitantes'
+      ehAcompanhante ? 'Histórico Acompanhantes' : 'Histórico Visitantes'
     );
     
     if (!sheet || !historicoSheet) {
