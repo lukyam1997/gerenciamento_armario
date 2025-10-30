@@ -367,6 +367,125 @@ const PASTA_DRIVE_ID = '1nYsGJJUIufxDYVvIanVXCbPx7YuBOYDP';
 const TERMOS_CACHE_KEY = 'termos_registrados_cache_v1';
 const TERMOS_CACHE_TTL = 120; // segundos
 
+// Configurações gerais de cache para otimizar leituras
+const CACHE_PREFIXO = 'locknac_cache_v1';
+const CACHE_TTL_PADRAO = 60; // segundos
+const CACHE_TTL_ARMARIOS = 45;
+const CACHE_TTL_HISTORICO = 90;
+const CACHE_TTL_MOVIMENTACOES = 45;
+
+function montarChaveCache() {
+  var partes = Array.prototype.slice.call(arguments).filter(function(parte) {
+    return parte !== null && parte !== undefined && parte !== '';
+  }).map(function(parte) {
+    if (typeof parte === 'object') {
+      try {
+        return JSON.stringify(parte);
+      } catch (erro) {
+        return '';
+      }
+    }
+    return parte.toString().trim().toLowerCase().replace(/\s+/g, '-');
+  });
+
+  if (!partes.length) {
+    return CACHE_PREFIXO;
+  }
+
+  return CACHE_PREFIXO + ':' + partes.join(':');
+}
+
+function executarComCache(chave, ttl, fornecedor) {
+  if (!chave) {
+    return fornecedor();
+  }
+
+  var cache = CacheService.getScriptCache();
+
+  try {
+    var armazenado = cache.get(chave);
+    if (armazenado) {
+      return JSON.parse(armazenado);
+    }
+  } catch (erroLeitura) {
+    try {
+      cache.remove(chave);
+    } catch (erroRemocao) {
+      // Ignorado propositalmente
+    }
+  }
+
+  var resultado = fornecedor();
+
+  if (resultado && resultado.success) {
+    try {
+      cache.put(chave, JSON.stringify(resultado), ttl || CACHE_TTL_PADRAO);
+    } catch (erroGravacao) {
+      // Falhas de cache não devem interromper o fluxo principal
+    }
+  }
+
+  return resultado;
+}
+
+function limparCaches(chaves) {
+  if (!chaves) {
+    return;
+  }
+
+  var lista = Array.isArray(chaves) ? chaves : [chaves];
+  if (!lista.length) {
+    return;
+  }
+
+  var cache = CacheService.getScriptCache();
+  lista.forEach(function(chave) {
+    if (!chave) {
+      return;
+    }
+    try {
+      cache.remove(chave);
+    } catch (erroRemocao) {
+      // Ignorado propositalmente
+    }
+  });
+}
+
+function limparCacheArmarios() {
+  limparCaches([
+    montarChaveCache('armarios', 'visitante'),
+    montarChaveCache('armarios', 'acompanhante'),
+    montarChaveCache('armarios', 'geral')
+  ]);
+}
+
+function limparCacheUsuarios() {
+  limparCaches(montarChaveCache('usuarios'));
+}
+
+function limparCacheHistorico() {
+  limparCaches([
+    montarChaveCache('historico', 'visitante'),
+    montarChaveCache('historico', 'acompanhante')
+  ]);
+}
+
+function limparCacheCadastroArmarios() {
+  limparCaches(montarChaveCache('cadastro-armarios'));
+}
+
+function limparCacheUnidades() {
+  limparCaches(montarChaveCache('unidades'));
+}
+
+function limparCacheMovimentacoes(armarioId) {
+  var chaveEspecifica = armarioId !== undefined && armarioId !== null ? montarChaveCache('movimentacoes', armarioId) : null;
+  limparCaches([
+    chaveEspecifica,
+    montarChaveCache('movimentacoes', 'todos')
+  ]);
+}
+
 // Inicializar planilha com todas as abas e cabeçalhos
 function inicializarPlanilha() {
   try {
@@ -435,6 +554,14 @@ function inicializarPlanilha() {
     adicionarDadosIniciais();
     
     registrarLog('SISTEMA', 'Planilha inicializada com sucesso');
+
+    limparCacheArmarios();
+    limparCacheUsuarios();
+    limparCacheHistorico();
+    limparCacheCadastroArmarios();
+    limparCacheUnidades();
+    limparCacheMovimentacoes();
+
     return { success: true, message: 'Planilha inicializada com sucesso' };
     
   } catch (error) {
@@ -631,54 +758,64 @@ function handlePost(e) {
 
 // Funções para Armários
 function getArmarios(tipo) {
-  try {
-    var tipoNormalizado = normalizarTextoBasico(tipo);
-    if (!tipoNormalizado) {
-      tipoNormalizado = 'geral';
-    }
+  var tipoNormalizadoOriginal = normalizarTextoBasico(tipo);
+  if (!tipoNormalizadoOriginal) {
+    tipoNormalizadoOriginal = 'geral';
+  }
 
-    var incluirTermos = tipoNormalizado === 'acompanhante' || tipoNormalizado === 'admin' ||
-      tipoNormalizado === 'ambos' || tipoNormalizado === 'todos' || tipoNormalizado === 'geral';
-    var termosMap = {};
+  var chaveCacheTipo = tipoNormalizadoOriginal;
+  if (chaveCacheTipo === 'admin' || chaveCacheTipo === 'ambos' || chaveCacheTipo === 'todos') {
+    chaveCacheTipo = 'geral';
+  }
 
-    if (incluirTermos) {
-      var termosInfo = obterTermosRegistrados();
-      termosInfo.termos.forEach(function(termo) {
-        var chave = termo.armarioId;
-        if (!chave && chave !== 0) {
-          return;
-        }
+  var chaveCache = montarChaveCache('armarios', chaveCacheTipo);
 
-        var termoAtual = termosMap[chave];
-        var termoFinalizado = Boolean(termo.pdfUrl || (termo.assinaturas && termo.assinaturas.finalizadoEm));
-        if (!termoAtual) {
-          termosMap[chave] = termo;
-          return;
-        }
+  return executarComCache(chaveCache, CACHE_TTL_ARMARIOS, function() {
+    try {
+      var tipoNormalizado = tipoNormalizadoOriginal;
+      var incluirTermos = tipoNormalizado === 'acompanhante' || tipoNormalizado === 'admin' ||
+        tipoNormalizado === 'ambos' || tipoNormalizado === 'todos' || tipoNormalizado === 'geral';
+      var termosMap = {};
 
-        var atualFinalizado = Boolean(termoAtual.pdfUrl || (termoAtual.assinaturas && termoAtual.assinaturas.finalizadoEm));
+      if (incluirTermos) {
+        var termosInfo = obterTermosRegistrados();
+        termosInfo.termos.forEach(function(termo) {
+          var chave = termo.armarioId;
+          if (!chave && chave !== 0) {
+            return;
+          }
 
-        if (!termoFinalizado && atualFinalizado) {
-          termosMap[chave] = termo;
-        } else if (termoFinalizado === atualFinalizado && termoAtual.id < termo.id) {
-          termosMap[chave] = termo;
-        }
-      });
-    }
+          var termoAtual = termosMap[chave];
+          var termoFinalizado = Boolean(termo.pdfUrl || (termo.assinaturas && termo.assinaturas.finalizadoEm));
+          if (!termoAtual) {
+            termosMap[chave] = termo;
+            return;
+          }
 
-    if (tipoNormalizado === 'admin' || tipoNormalizado === 'ambos' || tipoNormalizado === 'todos' || tipoNormalizado === 'geral') {
-      var visitantes = getArmariosFromSheet('Visitantes', 'visitante', null);
-      var acompanhantes = getArmariosFromSheet('Acompanhantes', 'acompanhante', termosMap);
-      return { success: true, data: visitantes.concat(acompanhantes) };
-    } else {
+          var atualFinalizado = Boolean(termoAtual.pdfUrl || (termoAtual.assinaturas && termoAtual.assinaturas.finalizadoEm));
+
+          if (!termoFinalizado && atualFinalizado) {
+            termosMap[chave] = termo;
+          } else if (termoFinalizado === atualFinalizado && termoAtual.id < termo.id) {
+            termosMap[chave] = termo;
+          }
+        });
+      }
+
+      if (tipoNormalizado === 'admin' || tipoNormalizado === 'ambos' || tipoNormalizado === 'todos' || tipoNormalizado === 'geral') {
+        var visitantes = getArmariosFromSheet('Visitantes', 'visitante', null);
+        var acompanhantes = getArmariosFromSheet('Acompanhantes', 'acompanhante', termosMap);
+        return { success: true, data: visitantes.concat(acompanhantes) };
+      }
+
       var sheetName = tipoNormalizado === 'acompanhante' ? 'Acompanhantes' : 'Visitantes';
       var mapa = tipoNormalizado === 'acompanhante' ? termosMap : null;
       return { success: true, data: getArmariosFromSheet(sheetName, tipoNormalizado, mapa) };
+    } catch (error) {
+      registrarLog('ERRO', `Erro ao buscar armários: ${error.toString()}`);
+      return { success: false, error: error.toString() };
     }
-  } catch (error) {
-    registrarLog('ERRO', `Erro ao buscar armários: ${error.toString()}`);
-    return { success: false, error: error.toString() };
-  }
+  });
 }
 
 function getArmariosFromSheet(sheetName, tipo, termosMap) {
@@ -917,6 +1054,9 @@ function cadastrarArmario(armarioData) {
 
     registrarLog('CADASTRO', `Armário ${numeroArmario} cadastrado para ${armarioData.nomeVisitante}`);
 
+    limparCacheArmarios();
+    limparCacheHistorico();
+
     return {
       success: true,
       message: 'Armário cadastrado com sucesso',
@@ -1009,6 +1149,9 @@ function liberarArmario(id, tipo) {
     
     registrarLog('LIBERAÇÃO', `Armário ${numeroArmario} liberado`);
 
+    limparCacheArmarios();
+    limparCacheHistorico();
+
     return { success: true, message: 'Armário liberado com sucesso' };
     
   } catch (error) {
@@ -1019,57 +1162,59 @@ function liberarArmario(id, tipo) {
 
 // Funções para Usuários
 function getUsuarios() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName('Usuários');
+  return executarComCache(montarChaveCache('usuarios'), CACHE_TTL_PADRAO, function() {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName('Usuários');
 
-    if (!sheet || sheet.getLastRow() < 2) {
-      return { success: true, data: [] };
-    }
-
-    var estrutura = obterEstruturaPlanilha(sheet);
-    var totalColunas = estrutura.ultimaColuna || 10;
-    var mapasUnidades = obterMapasUnidades();
-    var dados = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
-    var usuarios = [];
-
-    dados.forEach(function(linha) {
-      var id = obterValorLinha(linha, estrutura, 'id', linha[0]);
-      if (!id && id !== 0) {
-        return;
+      if (!sheet || sheet.getLastRow() < 2) {
+        return { success: true, data: [] };
       }
 
-      var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
-      var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
-      var unidadesBrutas = obterValorLinhaFlexivel(linha, estrutura, ['unidades', 'unidade', 'acesso unidades'], '');
-      var unidades = resolverIdsUnidadesArmazenadas(unidadesBrutas, mapasUnidades);
-      var unidadesUnicas = [];
-      unidades.forEach(function(unidade) {
-        if (unidadesUnicas.indexOf(unidade) === -1) {
-          unidadesUnicas.push(unidade);
+      var estrutura = obterEstruturaPlanilha(sheet);
+      var totalColunas = estrutura.ultimaColuna || 10;
+      var mapasUnidades = obterMapasUnidades();
+      var dados = sheet.getRange(2, 1, sheet.getLastRow() - 1, totalColunas).getValues();
+      var usuarios = [];
+
+      dados.forEach(function(linha) {
+        var id = obterValorLinha(linha, estrutura, 'id', linha[0]);
+        if (!id && id !== 0) {
+          return;
         }
+
+        var perfilValor = obterValorLinha(linha, estrutura, 'perfil', 'usuario');
+        var perfil = perfilValor ? perfilValor.toString().trim().toLowerCase() : 'usuario';
+        var unidadesBrutas = obterValorLinhaFlexivel(linha, estrutura, ['unidades', 'unidade', 'acesso unidades'], '');
+        var unidades = resolverIdsUnidadesArmazenadas(unidadesBrutas, mapasUnidades);
+        var unidadesUnicas = [];
+        unidades.forEach(function(unidade) {
+          if (unidadesUnicas.indexOf(unidade) === -1) {
+            unidadesUnicas.push(unidade);
+          }
+        });
+
+        usuarios.push({
+          id: id,
+          nome: obterValorLinha(linha, estrutura, 'nome', ''),
+          email: obterValorLinha(linha, estrutura, 'email', ''),
+          perfil: perfil,
+          acessoVisitantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso visitantes', false)),
+          acessoAcompanhantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso acompanhantes', false)),
+          dataCadastro: obterValorLinha(linha, estrutura, 'data cadastro', ''),
+          status: obterValorLinha(linha, estrutura, 'status', ''),
+          senha: obterValorLinha(linha, estrutura, 'senha', ''),
+          unidades: unidadesUnicas
+        });
       });
 
-      usuarios.push({
-        id: id,
-        nome: obterValorLinha(linha, estrutura, 'nome', ''),
-        email: obterValorLinha(linha, estrutura, 'email', ''),
-        perfil: perfil,
-        acessoVisitantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso visitantes', false)),
-        acessoAcompanhantes: converterParaBoolean(obterValorLinha(linha, estrutura, 'acesso acompanhantes', false)),
-        dataCadastro: obterValorLinha(linha, estrutura, 'data cadastro', ''),
-        status: obterValorLinha(linha, estrutura, 'status', ''),
-        senha: obterValorLinha(linha, estrutura, 'senha', ''),
-        unidades: unidadesUnicas
-      });
-    });
+      return { success: true, data: usuarios };
 
-    return { success: true, data: usuarios };
-
-  } catch (error) {
-    registrarLog('ERRO', `Erro ao buscar usuários: ${error.toString()}`);
-    return { success: false, error: error.toString() };
-  }
+    } catch (error) {
+      registrarLog('ERRO', `Erro ao buscar usuários: ${error.toString()}`);
+      return { success: false, error: error.toString() };
+    }
+  });
 }
 
 function cadastrarUsuario(dados) {
@@ -1166,6 +1311,8 @@ function cadastrarUsuario(dados) {
     sheet.getRange(ultimaLinha + 1, 1, 1, totalColunas).setValues([novaLinha]);
 
     registrarLog('CADASTRO USUARIO', `Usuário ${nome} cadastrado`);
+
+    limparCacheUsuarios();
 
     return {
       success: true,
@@ -1287,6 +1434,8 @@ function atualizarUsuario(dados) {
 
     registrarLog('ATUALIZAR USUARIO', 'Usuário ' + nome + ' atualizado');
 
+    limparCacheUsuarios();
+
     return {
       success: true,
       message: 'Usuário atualizado com sucesso',
@@ -1345,6 +1494,8 @@ function excluirUsuario(dados) {
 
     sheet.deleteRow(linhaExcluir);
     registrarLog('EXCLUIR USUARIO', 'Usuário ' + nomeUsuario + ' removido');
+
+    limparCacheUsuarios();
 
     return { success: true };
 
@@ -1447,79 +1598,86 @@ function autenticarUsuario(dados) {
 
 // Funções para Histórico
 function getHistorico(tipo) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheetName = tipo === 'acompanhante' ? 'Histórico Acompanhantes' : 'Histórico Visitantes';
-    var sheet = ss.getSheetByName(sheetName);
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      return { success: true, data: [] };
-    }
-    
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 13).getValues();
-    var historico = [];
-    
-    data.forEach(function(row) {
-      if (row[0]) {
-        historico.push({
-          id: row[0],
-          data: formatarDataPlanilha(row[1]),
-          armario: row[2],
-          nome: row[3],
-          paciente: row[4],
-          leito: row[5],
-          volumes: row[6],
-          horaInicio: formatarHorarioPlanilha(row[7]),
-          horaFim: formatarHorarioPlanilha(row[8]),
-          status: row[9],
-          tipo: row[10],
-          unidade: row[11],
-          whatsapp: row[12] || ''
-        });
+  var tipoNormalizado = normalizarTextoBasico(tipo) === 'acompanhante' ? 'acompanhante' : 'visitante';
+  var chaveCache = montarChaveCache('historico', tipoNormalizado);
+
+  return executarComCache(chaveCache, CACHE_TTL_HISTORICO, function() {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheetName = tipoNormalizado === 'acompanhante' ? 'Histórico Acompanhantes' : 'Histórico Visitantes';
+      var sheet = ss.getSheetByName(sheetName);
+
+      if (!sheet || sheet.getLastRow() < 2) {
+        return { success: true, data: [] };
       }
-    });
-    
-    return { success: true, data: historico.reverse() }; // Mais recentes primeiro
-    
-  } catch (error) {
-    registrarLog('ERRO', `Erro ao buscar histórico: ${error.toString()}`);
-    return { success: false, error: error.toString() };
-  }
+
+      var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 13).getValues();
+      var historico = [];
+
+      data.forEach(function(row) {
+        if (row[0]) {
+          historico.push({
+            id: row[0],
+            data: formatarDataPlanilha(row[1]),
+            armario: row[2],
+            nome: row[3],
+            paciente: row[4],
+            leito: row[5],
+            volumes: row[6],
+            horaInicio: formatarHorarioPlanilha(row[7]),
+            horaFim: formatarHorarioPlanilha(row[8]),
+            status: row[9],
+            tipo: row[10],
+            unidade: row[11],
+            whatsapp: row[12] || ''
+          });
+        }
+      });
+
+      return { success: true, data: historico.reverse() }; // Mais recentes primeiro
+
+    } catch (error) {
+      registrarLog('ERRO', `Erro ao buscar histórico: ${error.toString()}`);
+      return { success: false, error: error.toString() };
+    }
+  });
 }
 
 // Funções para Cadastro de Armários Físicos
 function getCadastroArmarios() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName('Cadastro Armários');
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      return { success: true, data: [] };
-    }
-    
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 7).getValues();
-    var armarios = [];
-    
-    data.forEach(function(row) {
-      if (row[0]) {
-        armarios.push({
-          id: row[0],
-          numero: row[1],
-          tipo: row[2],
-          unidade: row[3],
-          localizacao: row[4],
-          status: row[5],
-          dataCadastro: row[6]
-        });
+  return executarComCache(montarChaveCache('cadastro-armarios'), CACHE_TTL_PADRAO, function() {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName('Cadastro Armários');
+
+      if (!sheet || sheet.getLastRow() < 2) {
+        return { success: true, data: [] };
       }
-    });
-    
-    return { success: true, data: armarios };
-    
-  } catch (error) {
-    registrarLog('ERRO', `Erro ao buscar cadastro de armários: ${error.toString()}`);
-    return { success: false, error: error.toString() };
-  }
+
+      var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 7).getValues();
+      var armarios = [];
+
+      data.forEach(function(row) {
+        if (row[0]) {
+          armarios.push({
+            id: row[0],
+            numero: row[1],
+            tipo: row[2],
+            unidade: row[3],
+            localizacao: row[4],
+            status: row[5],
+            dataCadastro: row[6]
+          });
+        }
+      });
+
+      return { success: true, data: armarios };
+
+    } catch (error) {
+      registrarLog('ERRO', `Erro ao buscar cadastro de armários: ${error.toString()}`);
+      return { success: false, error: error.toString() };
+    }
+  });
 }
 
 function cadastrarArmarioFisico(armarioData) {
@@ -1579,12 +1737,15 @@ function cadastrarArmarioFisico(armarioData) {
 
     if (linhas.length > 0) {
       sheet.getRange(lastRow + 1, 1, linhas.length, 7).setValues(linhas);
-      
+
       // Também criar nas abas de uso
       criarArmariosUso(linhas);
     }
 
     registrarLog('CADASTRO', `Armários físicos cadastrados: ${novosArmarios.join(', ')}`);
+
+    limparCacheCadastroArmarios();
+    limparCacheArmarios();
 
     return {
       success: true,
@@ -1657,34 +1818,36 @@ function criarArmariosUso(armarios) {
 
 // Funções para Unidades
 function getUnidades() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName('Unidades');
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      return { success: true, data: [] };
-    }
-    
-    var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 4).getValues();
-    var unidades = [];
-    
-    data.forEach(function(row) {
-      if (row[0]) {
-        unidades.push({
-          id: row[0],
-          nome: row[1],
-          status: row[2],
-          dataCadastro: row[3]
-        });
+  return executarComCache(montarChaveCache('unidades'), CACHE_TTL_PADRAO, function() {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName('Unidades');
+
+      if (!sheet || sheet.getLastRow() < 2) {
+        return { success: true, data: [] };
       }
-    });
-    
-    return { success: true, data: unidades };
-    
-  } catch (error) {
-    registrarLog('ERRO', `Erro ao buscar unidades: ${error.toString()}`);
-    return { success: false, error: error.toString() };
-  }
+
+      var data = sheet.getRange(2, 1, sheet.getLastRow()-1, 4).getValues();
+      var unidades = [];
+
+      data.forEach(function(row) {
+        if (row[0]) {
+          unidades.push({
+            id: row[0],
+            nome: row[1],
+            status: row[2],
+            dataCadastro: row[3]
+          });
+        }
+      });
+
+      return { success: true, data: unidades };
+
+    } catch (error) {
+      registrarLog('ERRO', `Erro ao buscar unidades: ${error.toString()}`);
+      return { success: false, error: error.toString() };
+    }
+  });
 }
 
 function cadastrarUnidade(dados) {
@@ -1715,9 +1878,11 @@ function cadastrarUnidade(dados) {
     ];
     
     sheet.getRange(lastRow + 1, 1, 1, 4).setValues([novaLinha]);
-    
+
     registrarLog('CADASTRO UNIDADE', `Unidade ${dados.nome} cadastrada`);
-    
+
+    limparCacheUnidades();
+
     return { success: true, message: 'Unidade cadastrada com sucesso', id: novoId };
     
   } catch (error) {
@@ -1751,9 +1916,11 @@ function alternarStatusUnidade(dados) {
     
     var novoStatus = data[unidadeIndex][2] === 'ativa' ? 'inativa' : 'ativa';
     sheet.getRange(unidadeIndex + 1, 3).setValue(novoStatus);
-    
+
     registrarLog('ALTERAÇÃO UNIDADE', `Status da unidade ${dados.nome} alterado para ${novoStatus}`);
-    
+
+    limparCacheUnidades();
+
     return { success: true, message: `Unidade ${novoStatus === 'ativa' ? 'ativada' : 'desativada'} com sucesso` };
     
   } catch (error) {
@@ -1917,6 +2084,7 @@ function salvarTermoCompleto(dadosTermo) {
     }
 
     limparCacheTermos();
+    limparCacheArmarios();
 
     registrarLog('TERMO_APLICADO', `Termo inicial registrado para armário ${dadosTermo.numeroArmario}`);
 
@@ -2203,6 +2371,7 @@ function finalizarTermo(dados) {
     termoEncontrado.status = 'Finalizado';
 
     limparCacheTermos();
+    limparCacheArmarios();
 
     registrarLog('TERMO_FINALIZADO', 'Termo finalizado para armário ' + termoEncontrado.numeroArmario);
 
@@ -2451,39 +2620,49 @@ function formatarDataParaHTML(data) {
 
 // Funções para Movimentações
 function getMovimentacoes(dados) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName('Movimentações');
-    
-    if (!sheet || sheet.getLastRow() < 2) {
-      return { success: true, data: [] };
-    }
-    
-    var data = sheet.getDataRange().getValues();
-    var movimentacoes = [];
-    
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][1] == dados.armarioId) {
-        movimentacoes.push({
-          id: data[i][0],
-          armarioId: data[i][1],
-          numeroArmario: data[i][2],
-          tipo: data[i][3],
-          descricao: data[i][4],
-          responsavel: data[i][5],
-          data: data[i][6],
-          hora: data[i][7],
-          dataHoraRegistro: data[i][8]
-        });
+  var possuiArmario = dados && dados.armarioId !== undefined && dados.armarioId !== null;
+  var armarioId = possuiArmario ? dados.armarioId : null;
+  var chaveCache = montarChaveCache('movimentacoes', possuiArmario ? armarioId : 'todos');
+
+  return executarComCache(chaveCache, CACHE_TTL_MOVIMENTACOES, function() {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName('Movimentações');
+
+      if (!sheet || sheet.getLastRow() < 2) {
+        return { success: true, data: [] };
       }
+
+      var data = sheet.getDataRange().getValues();
+      var movimentacoes = [];
+
+      if (!possuiArmario) {
+        return { success: true, data: movimentacoes };
+      }
+
+      for (var i = 1; i < data.length; i++) {
+        if (data[i][1] == armarioId) {
+          movimentacoes.push({
+            id: data[i][0],
+            armarioId: data[i][1],
+            numeroArmario: data[i][2],
+            tipo: data[i][3],
+            descricao: data[i][4],
+            responsavel: data[i][5],
+            data: data[i][6],
+            hora: data[i][7],
+            dataHoraRegistro: data[i][8]
+          });
+        }
+      }
+
+      return { success: true, data: movimentacoes };
+
+    } catch (error) {
+      registrarLog('ERRO', `Erro ao buscar movimentações: ${error.toString()}`);
+      return { success: false, error: error.toString() };
     }
-    
-    return { success: true, data: movimentacoes };
-    
-  } catch (error) {
-    registrarLog('ERRO', `Erro ao buscar movimentações: ${error.toString()}`);
-    return { success: false, error: error.toString() };
-  }
+  });
 }
 
 function salvarMovimentacao(dados) {
@@ -2523,9 +2702,11 @@ function salvarMovimentacao(dados) {
     ];
     
     sheet.getRange(lastRow + 1, 1, 1, 9).setValues([novaLinha]);
-    
+
     registrarLog('MOVIMENTAÇÃO', `Movimentação registrada para armário ${numeroArmario}`);
-    
+
+    limparCacheMovimentacoes(dados.armarioId);
+
     return { success: true, message: 'Movimentação registrada com sucesso', id: novoId };
     
   } catch (error) {
