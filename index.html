@@ -3327,6 +3327,36 @@
         });
         const normalizarTexto = (valor) => (valor ?? '').toString().trim().toLowerCase();
         const normalizarIdentificador = (valor) => (valor ?? '').toString().trim();
+        function montarIdentificadoresArmario(armario) {
+            if (!armario) {
+                return null;
+            }
+            const idPlanilha = armario.idPlanilha !== undefined && armario.idPlanilha !== null
+                ? armario.idPlanilha.toString().trim()
+                : '';
+            const numeroArmario = normalizarIdentificador(armario.numero);
+            const tipo = armario.tipo || '';
+            return { idPlanilha, numeroArmario, tipo };
+        }
+        function montarPayloadTermo(armario, extras = {}) {
+            const identificadores = montarIdentificadoresArmario(armario) || { idPlanilha: '', numeroArmario: '', tipo: '' };
+            return {
+                armarioId: identificadores.idPlanilha,
+                numeroArmario: identificadores.numeroArmario,
+                tipo: identificadores.tipo,
+                ...extras
+            };
+        }
+        function montarPayloadAcaoArmario(armario, extras = {}) {
+            const identificadores = montarIdentificadoresArmario(armario) || { idPlanilha: '', numeroArmario: '', tipo: '' };
+            return {
+                id: identificadores.idPlanilha,
+                armarioId: identificadores.idPlanilha,
+                numeroArmario: identificadores.numeroArmario,
+                tipo: identificadores.tipo,
+                ...extras
+            };
+        }
         function extrairIdDataset(elemento) {
             if (!elemento || !elemento.dataset) {
                 return '';
@@ -3840,6 +3870,10 @@
                 const armariosProcessados = (resultado.data || []).map(armario => ({
                     ...armario,
                     id: normalizarIdentificador(armario.id),
+                    idPlanilha: armario.idPlanilha !== undefined && armario.idPlanilha !== null
+                        ? armario.idPlanilha.toString().trim()
+                        : '',
+                    numero: normalizarIdentificador(armario.numero),
                     unidade: armario.unidade ? armario.unidade.trim() : ''
                 }));
                 estado.armarios = filtrarListaPorPermissao(armariosProcessados, item => item.unidade);
@@ -4789,7 +4823,7 @@
                 const statusTermoNormalizado = normalizarTexto(armario.termoStatus);
                 const finalizado = statusTermoNormalizado === 'finalizado';
                 const emAndamento = statusTermoNormalizado === 'em andamento';
-                const movResultado = await callGoogleScript('getMovimentacoes', { armarioId: armario.id });
+                const movResultado = await callGoogleScript('getMovimentacoes', montarPayloadTermo(armario));
                 if (estado.carregamentoTermosId !== carregamentoId) return;
 
                 const numMovimentacoes = movResultado.success ? movResultado.data.length : 0;
@@ -5227,7 +5261,9 @@
                         : 'WhatsApp do acompanhante';
                 }
                 elementos.armarioForm.dataset.modo = 'cadastro';
-                elementos.armarioForm.dataset.id = armario.id;
+                elementos.armarioForm.dataset.id = armario.idPlanilha || '';
+                elementos.armarioForm.dataset.idPlanilha = armario.idPlanilha || '';
+                elementos.armarioForm.dataset.armarioId = armario.id;
                 elementos.armarioForm.dataset.tipo = armario.tipo;
                 elementos.armarioForm.dataset.numero = armario.numero;
                 elementos.armarioModal.style.display = 'flex';
@@ -5492,7 +5528,9 @@
             const botaoSalvar = document.getElementById('btn-salvar');
             const finalizarLoading = iniciarLoadingBotao(botaoSalvar);
             try {
-                const id = parseInt(elementos.armarioForm.dataset.id);
+                const idPlanilhaBruto = elementos.armarioForm.dataset.idPlanilha || elementos.armarioForm.dataset.id || '';
+                const idPlanilha = normalizarIdentificador(idPlanilhaBruto);
+                const armarioChave = normalizarIdentificador(elementos.armarioForm.dataset.armarioId || '');
                 const tipo = elementos.armarioForm.dataset.tipo || 'visitante';
                 const numeroArmario = elementos.armarioForm.dataset.numero || '';
                 let volumesInformados = parseInt(document.getElementById('volumes').value, 10);
@@ -5500,7 +5538,8 @@
                     volumesInformados = 0;
                 }
                 const dados = {
-                    id: id,
+                    idPlanilha,
+                    id: idPlanilha,
                     numero: numeroArmario,
                     nomeVisitante: document.getElementById('nome-visitante').value.trim(),
                     nomePaciente: document.getElementById('nome-paciente').value.trim(),
@@ -5512,7 +5551,7 @@
                 };
                 if (tipo === 'acompanhante') {
                     termoPreCadastro = {
-                        id,
+                        id: idPlanilha,
                         nomeVisitante: dados.nomeVisitante,
                         nomePaciente: dados.nomePaciente,
                         leito: dados.leito,
@@ -5520,7 +5559,7 @@
                         whatsapp: dados.whatsapp
                     };
                     termoCadastroArmario = {
-                        id,
+                        id: idPlanilha,
                         nomeVisitante: dados.nomeVisitante,
                         nomePaciente: dados.nomePaciente,
                         leito: dados.leito,
@@ -5529,7 +5568,12 @@
                     let ocultarOverlay = () => {};
                     try {
                         ocultarOverlay = mostrarOverlayCarregamento('Preparando termo de responsabilidade...');
-                        await abrirTermoWizard(id);
+                        let chaveArmario = armarioChave;
+                        if (!chaveArmario) {
+                            const armarioEstado = estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === idPlanilha);
+                            chaveArmario = armarioEstado ? armarioEstado.id : '';
+                        }
+                        await abrirTermoWizard(chaveArmario || idPlanilha);
                         fecharModalArmario();
                     } catch (erroTermo) {
                         termoPreCadastro = null;
@@ -5597,8 +5641,19 @@
             }
         }
         // Liberar armário
-        async function liberarArmario(id, tipo) {
-            const resultado = await callGoogleScript('liberarArmario', { id, tipo });
+        async function liberarArmario(id, tipoPreferencial) {
+            const armario = obterArmarioPorId(id);
+            if (!armario) {
+                mostrarErro('Armário não encontrado. Atualize a lista e tente novamente.');
+                return;
+            }
+            const identificadores = montarIdentificadoresArmario(armario);
+            const payload = montarPayloadAcaoArmario(armario, {
+                tipo: tipoPreferencial || identificadores.tipo
+            });
+            payload.numero = identificadores.numeroArmario;
+
+            const resultado = await callGoogleScript('liberarArmario', payload);
             if (resultado.success) {
                 await carregarArmarios({ forcarAtualizacao: true });
                 await carregarEstatisticas();
@@ -5685,18 +5740,24 @@
             abrirTermoWizard(id);
         }
         async function abrirTermoWizard(id) {
-            const armario = obterArmarioPorId(id);
+            let armario = obterArmarioPorId(id);
+            if (!armario) {
+                armario = estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(id));
+            }
             if (!armario) return;
+            const identificadores = montarIdentificadoresArmario(armario);
             termoArmarioAtual = id;
-            elementos.termoArmario.textContent = armario.numero;
+            elementos.termoArmario.textContent = identificadores?.numeroArmario || armario.numero || '';
             elementos.termoForm.reset();
             elementos.termoForm.querySelectorAll('.wizard-field').forEach(field => field.classList.remove('invalid'));
             limparAssinaturaTermo(true);
 
             let termoDados = null;
-            const preCadastro = termoPreCadastro && Number(termoPreCadastro.id) === Number(id) ? termoPreCadastro : null;
+            const preCadastro = termoPreCadastro && identificadores && normalizarIdentificador(termoPreCadastro.id) === identificadores.idPlanilha
+                ? termoPreCadastro
+                : null;
             try {
-                const resposta = await callGoogleScript('getTermo', { armarioId: id });
+                const resposta = await callGoogleScript('getTermo', montarPayloadTermo(armario, { incluirFinalizados: false }));
                 if (resposta.success) {
                     termoDados = resposta.data;
                 } else if (resposta.error && resposta.error !== 'Termo não encontrado') {
@@ -5998,14 +6059,20 @@
 
         async function aplicarTermo() {
             if (termoArmarioAtual === null) return;
+            const armarioAtual = obterArmarioPorId(termoArmarioAtual) || estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(termoArmarioAtual));
+            if (!armarioAtual) {
+                mostrarErro('Armário não encontrado para registrar o termo.');
+                return;
+            }
+            const identificadores = montarIdentificadoresArmario(armarioAtual);
             // Capturar a assinatura do canvas
             const canvas = elementos.termoAssinaturaCanvas;
             const assinaturaBase64 = canvas ? canvas.toDataURL('image/png').replace('data:image/png;base64,', '') : '';
             const volumes = obterVolumesTermo();
             const descricaoVolumes = volumes.map(v => `${v.quantidade}x ${v.descricao}`).join('; ');
             const dadosTermo = {
-                armarioId: termoArmarioAtual,
-                numeroArmario: document.getElementById('termo-armario').textContent,
+                armarioId: identificadores?.idPlanilha || '',
+                numeroArmario: identificadores?.numeroArmario || document.getElementById('termo-armario').textContent,
                 paciente: document.getElementById('termo-paciente').value.trim(),
                 prontuario: document.getElementById('termo-prontuario').value.trim(),
                 nascimento: document.getElementById('termo-nascimento').value,
@@ -6021,15 +6088,16 @@
                 descricaoVolumes: descricaoVolumes,
                 assinaturaBase64: assinaturaBase64
             };
-            if (termoCadastroArmario && Number(termoCadastroArmario.id) === Number(termoArmarioAtual)) {
+            if (termoCadastroArmario && identificadores && normalizarIdentificador(termoCadastroArmario.id) === identificadores.idPlanilha) {
                 dadosTermo.cadastroArmario = {
-                    id: termoCadastroArmario.id,
+                    id: identificadores.idPlanilha,
                     nomeVisitante: dadosTermo.acompanhante,
                     nomePaciente: dadosTermo.paciente,
                     leito: dadosTermo.leito,
                     whatsapp: termoCadastroArmario.whatsapp || ''
                 };
             }
+            dadosTermo.tipo = identificadores?.tipo || 'acompanhante';
             const resultado = await callGoogleScript('salvarTermoCompleto', dadosTermo);
             if (resultado.success) {
                 fecharTermoModal();
@@ -6088,7 +6156,17 @@
         }
         async function renderizarMovimentacoes(id) {
             if (!elementos.movimentacoesList) return;
-            const resultado = await callGoogleScript('getMovimentacoes', { armarioId: id });
+            const armario = obterArmarioPorId(id) || estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(id));
+            if (!armario) {
+                elementos.movimentacoesList.innerHTML = '';
+                const erro = document.createElement('div');
+                erro.className = 'info-box';
+                erro.textContent = 'Armário não encontrado para carregar movimentações.';
+                elementos.movimentacoesList.appendChild(erro);
+                return;
+            }
+            const parametros = montarPayloadTermo(armario);
+            const resultado = await callGoogleScript('getMovimentacoes', parametros);
             if (!resultado.success) {
                 elementos.movimentacoesList.innerHTML = '';
                 const erro = document.createElement('div');
@@ -6126,9 +6204,17 @@
 
         async function salvarMovimentacao() {
             if (!movimentacaoArmarioAtual) return;
+            const armario = obterArmarioPorId(movimentacaoArmarioAtual) || estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(movimentacaoArmarioAtual));
+            if (!armario) {
+                mostrarErro('Armário não encontrado para registrar movimentação.');
+                return;
+            }
+            const identificadores = montarIdentificadoresArmario(armario);
+            const tipoSelecionado = normalizarTexto(elementos.movTipo.value);
             const dados = {
-                armarioId: movimentacaoArmarioAtual,
-                tipo: elementos.movTipo.value,
+                armarioId: identificadores?.idPlanilha || '',
+                numeroArmario: identificadores?.numeroArmario || '',
+                tipo: tipoSelecionado || identificadores?.tipo || '',
                 descricao: elementos.movDescricao.value.trim(),
                 responsavel: elementos.movResponsavel.value.trim(),
                 data: elementos.movData.value,
@@ -6196,7 +6282,7 @@
                 return;
             }
             // Buscar detalhes do termo
-            const resultado = await callGoogleScript('getTermo', { armarioId: id });
+            const resultado = await callGoogleScript('getTermo', montarPayloadTermo(armario, { incluirFinalizados: true }));
             if (!resultado.success) {
                 mostrarErro('Termo não encontrado');
                 return;
@@ -6236,7 +6322,12 @@
             });
         }
         async function verPDFTermo(id) {
-            const resultado = await callGoogleScript('getTermo', { armarioId: id });
+            const armario = obterArmarioPorId(id) || estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(id));
+            if (!armario) {
+                mostrarErro('Armário não encontrado');
+                return;
+            }
+            const resultado = await callGoogleScript('getTermo', montarPayloadTermo(armario, { incluirFinalizados: true }));
             if (resultado.success && resultado.data.pdfUrl) {
                 window.open(resultado.data.pdfUrl, '_blank');
             } else {
@@ -6280,11 +6371,12 @@
                 mostrarErro('Armário não encontrado para liberação.');
                 return;
             }
+            const identificadores = montarIdentificadoresArmario(armario);
 
             const finalizarPreparacao = mostrarOverlayCarregamento('Preparando liberação do armário...');
             let termoDados = null;
             try {
-                const respostaTermo = await callGoogleScript('getTermo', { armarioId: id });
+                const respostaTermo = await callGoogleScript('getTermo', montarPayloadTermo(armario, { incluirFinalizados: true }));
                 if (respostaTermo.success && respostaTermo.data) {
                     termoDados = respostaTermo.data;
                 } else if (respostaTermo.error && respostaTermo.error !== 'Termo não encontrado') {
@@ -6453,7 +6545,8 @@
 
             try {
                 const resultadoFinalizacao = await callGoogleScript('finalizarTermo', {
-                    armarioId: id,
+                    armarioId: identificadores?.idPlanilha || '',
+                    numeroArmario: identificadores?.numeroArmario || '',
                     metodo,
                     assinaturaFinal: '',
                     confirmacao,
@@ -6483,8 +6576,9 @@
                 atualizarEtapa('armario', 'ativa');
 
                 const resultadoLiberacao = await callGoogleScript('liberarArmario', {
-                    id,
-                    tipo: 'acompanhante'
+                    id: identificadores?.idPlanilha || '',
+                    tipo: 'acompanhante',
+                    numero: identificadores?.numeroArmario || ''
                 });
 
                 if (!resultadoLiberacao.success) {
