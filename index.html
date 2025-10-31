@@ -1454,72 +1454,6 @@
             font-size: 0.85rem;
             color: var(--muted-color);
         }
-        /* Liberação */
-        .confirm-slider {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .confirm-slider input[type="range"] {
-            width: 100%;
-            accent-color: var(--primary-color);
-        }
-        .confirm-slider span {
-            font-size: 0.85rem;
-            color: var(--muted-color);
-        }
-        .confirm-statement {
-            background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-            border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
-            border-radius: 12px;
-            padding: 14px;
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        .signature-methods {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 12px;
-        }
-        .signature-methods label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 14px;
-            border-radius: 999px;
-            border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
-            background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-            cursor: pointer;
-        }
-        .signature-area {
-            border: 1px dashed color-mix(in srgb, var(--primary-color) 30%, transparent);
-            border-radius: 12px;
-            padding: 12px;
-            background: var(--surface-color);
-        }
-        .signature-canvas {
-            width: 100%;
-            height: 220px;
-            border: 1px solid color-mix(in srgb, var(--dark-color) 6%, transparent);
-            border-radius: 12px;
-            background: color-mix(in srgb, var(--light-color) 85%, white 15%);
-            touch-action: none;
-        }
-        .signature-actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 8px;
-        }
-        .signature-actions .btn {
-            padding: 8px 12px;
-            border-radius: 8px;
-        }
-        .cpf-input {
-            max-width: 180px;
-        }
         .info-box {
             background: color-mix(in srgb, var(--primary-color) 14%, transparent);
             border: 1px solid color-mix(in srgb, var(--primary-color) 32%, transparent);
@@ -2561,52 +2495,6 @@
             </div>
         </div>
     </div>
-    <!-- Modal de Liberação -->
-    <div class="modal modal-large" id="liberacao-modal">
-        <div class="modal-content modal-scrollable">
-            <div class="modal-header">
-                <div class="modal-title">Encerrar armário <span id="liberacao-armario"></span></div>
-                <button class="modal-close" id="liberacao-modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Confirme os dados antes de liberar o armário. Esta ação removerá o vínculo do acompanhante e encerrará o termo.</p>
-                <div class="info-box" id="liberacao-detalhes"></div>
-                <div class="confirm-slider">
-                    <label for="liberacao-slider">Arraste para confirmar a identificação</label>
-                    <input type="range" id="liberacao-slider" min="0" max="100" value="0">
-                    <span>Deslize o controle totalmente para a direita para habilitar a confirmação.</span>
-                </div>
-                <div class="confirm-statement">
-                    <input type="checkbox" id="liberacao-checkbox">
-                    <span>Declaro que após ter recebido os devidos esclarecimentos, confirmo que esta liberação corresponde à pessoa identificada e estou ciente das responsabilidades assumidas.</span>
-                </div>
-                <p><strong>Data:</strong> <span id="liberacao-data"></span></p>
-                <div class="signature-section">
-                    <p style="margin-bottom:10px;">Escolha uma forma de confirmação:</p>
-                    <div class="signature-methods">
-                        <label><input type="radio" name="liberacao-metodo" value="assinatura" checked> Assinatura digital</label>
-                        <label><input type="radio" name="liberacao-metodo" value="cpf"> 5 primeiros dígitos do CPF</label>
-                    </div>
-                    <div class="signature-area" id="assinatura-area">
-                        <canvas id="signature-canvas" class="signature-canvas"></canvas>
-                        <div class="signature-actions">
-                            <button type="button" class="btn btn-secondary" id="signature-clear">Limpar assinatura</button>
-                        </div>
-                    </div>
-                    <div class="signature-area" id="cpf-area" style="display:none;">
-                        <div class="wizard-field">
-                            <label for="cpf-confirmacao" class="wizard-required">Informe os 5 primeiros dígitos do CPF</label>
-                            <input type="text" id="cpf-confirmacao" class="form-control cpf-input" maxlength="5" inputmode="numeric" pattern="[0-9]*">
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="liberacao-btn-cancelar">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-disabled" id="liberacao-btn-confirmar">Confirmar liberação</button>
-            </div>
-        </div>
-    </div>
     <!-- Painel de Notificações -->
     <div class="notification-panel" id="notification-panel">
         <div class="notification-header">
@@ -3010,21 +2898,6 @@
             movResponsavel: document.getElementById('mov-responsavel'),
             movData: document.getElementById('mov-data'),
             movHora: document.getElementById('mov-hora'),
-            liberacaoModal: document.getElementById('liberacao-modal'),
-            liberacaoModalClose: document.getElementById('liberacao-modal-close'),
-            liberacaoDetalhes: document.getElementById('liberacao-detalhes'),
-            liberacaoArmario: document.getElementById('liberacao-armario'),
-            liberacaoSlider: document.getElementById('liberacao-slider'),
-            liberacaoCheckbox: document.getElementById('liberacao-checkbox'),
-            liberacaoData: document.getElementById('liberacao-data'),
-            liberacaoBtnCancelar: document.getElementById('liberacao-btn-cancelar'),
-            liberacaoBtnConfirmar: document.getElementById('liberacao-btn-confirmar'),
-            assinaturaCanvas: document.getElementById('signature-canvas'),
-            assinaturaClear: document.getElementById('signature-clear'),
-            assinaturaArea: document.getElementById('assinatura-area'),
-            cpfArea: document.getElementById('cpf-area'),
-            cpfConfirmacao: document.getElementById('cpf-confirmacao'),
-            liberacaoMetodoRadios: document.querySelectorAll('input[name="liberacao-metodo"]'),
             btnNovaUnidade: document.getElementById('btn-nova-unidade'),
             tabelaUnidades: document.getElementById('tabela-unidades'),
             tabelaUnidadesBody: document.querySelector('#tabela-unidades tbody'),
@@ -3491,13 +3364,8 @@
         let termoPreCadastro = null;
         let termoCadastroArmario = null;
         let movimentacaoArmarioAtual = null;
-        let liberacaoArmarioAtual = null;
-        let liberacaoTipoAtual = 'acompanhante';
-        let assinaturaDesenhada = false;
-        let desenhandoAssinatura = false;
         let termoAssinaturaDesenhada = false;
         let termoDesenhandoAssinatura = false;
-        let liberacaoRequisitosOk = false;
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             inicializarLogin();
@@ -3761,17 +3629,12 @@
             termoPassoAtual = 0;
             termoArmarioAtual = null;
             movimentacaoArmarioAtual = null;
-            liberacaoArmarioAtual = null;
-            assinaturaDesenhada = false;
-            desenhandoAssinatura = false;
             termoAssinaturaDesenhada = false;
             termoDesenhandoAssinatura = false;
-            liberacaoRequisitosOk = false;
             fecharModalArmario();
             fecharModalUsuario();
             fecharTermoModal();
             fecharMovimentacaoModal();
-            fecharModalLiberacao();
             fecharModalAvatar({ focusTrigger: false });
         }
         async function carregarDadosIniciais() {
@@ -3911,22 +3774,6 @@
             imagem.src = dataUrl.startsWith('data:') ? dataUrl : `data:image/png;base64,${dataUrl}`;
         }
         function inicializarCanvasAssinatura() {
-            if (elementos.assinaturaCanvas) {
-                const assinaturaExistente = assinaturaDesenhada ? elementos.assinaturaCanvas.toDataURL('image/png') : null;
-                const rect = elementos.assinaturaCanvas.getBoundingClientRect();
-                if (rect.width && rect.height) {
-                    elementos.assinaturaCanvas.width = rect.width;
-                    elementos.assinaturaCanvas.height = rect.height;
-                }
-                const ctx = elementos.assinaturaCanvas.getContext('2d');
-                ctx.lineWidth = 2;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = '#0b1324';
-                if (assinaturaExistente) {
-                    restaurarDesenhoCanvas(elementos.assinaturaCanvas, assinaturaExistente);
-                }
-            }
             if (elementos.termoAssinaturaCanvas) {
                 const assinaturaTermoExistente = termoAssinaturaDesenhada
                     ? elementos.termoAssinaturaCanvas.toDataURL('image/png')
@@ -4219,7 +4066,7 @@
                                 if ((alvo.dataset.tipo || '').toLowerCase() === 'visitante') {
                                     await confirmarLiberacaoVisitante(id);
                                 } else {
-                                    await abrirModalLiberacao(id, alvo.dataset.tipo || 'acompanhante');
+                                    await confirmarLiberacaoAcompanhante(id);
                                 }
                                 break;
                             default:
@@ -4248,7 +4095,7 @@
                                 usarArmario(id);
                                 break;
                             case 'liberar':
-                                await abrirModalLiberacao(id, alvo.dataset.tipo || 'acompanhante');
+                                await confirmarLiberacaoAcompanhante(id);
                                 break;
                             case 'mov':
                                 await abrirMovimentacoes(id);
@@ -4270,27 +4117,6 @@
             if (elementos.usuarioUnidades) {
                 elementos.usuarioUnidades.addEventListener('change', tratarAlteracaoUnidadeUsuario);
             }
-            // Liberação de armário
-            elementos.liberacaoModalClose.addEventListener('click', fecharModalLiberacao);
-            elementos.liberacaoBtnCancelar.addEventListener('click', fecharModalLiberacao);
-            elementos.liberacaoSlider.addEventListener('input', atualizarEstadoLiberacao);
-            elementos.liberacaoCheckbox.addEventListener('change', atualizarEstadoLiberacao);
-            elementos.liberacaoBtnConfirmar.addEventListener('click', confirmarLiberacao);
-            elementos.assinaturaClear.addEventListener('click', function() {
-                limparAssinatura();
-                atualizarEstadoLiberacao();
-            });
-            elementos.cpfConfirmacao.addEventListener('input', function() {
-                this.value = this.value.replace(/\D/g, '').slice(0, 5);
-                atualizarEstadoLiberacao();
-            });
-            elementos.liberacaoMetodoRadios.forEach(radio => radio.addEventListener('change', alternarMetodoLiberacao));
-            elementos.assinaturaCanvas.addEventListener('pointerdown', iniciarAssinatura);
-            elementos.assinaturaCanvas.addEventListener('pointermove', desenharAssinatura);
-            elementos.assinaturaCanvas.addEventListener('pointerup', finalizarAssinatura);
-            elementos.assinaturaCanvas.addEventListener('pointerleave', finalizarAssinatura);
-            elementos.assinaturaCanvas.addEventListener('pointercancel', finalizarAssinatura);
-            alternarMetodoLiberacao();
             // Fechar notificações ao clicar fora
             document.addEventListener('click', function(e) {
                 if (!elementos.notificationBell.contains(e.target) &&
@@ -5258,7 +5084,7 @@
                         if (normalizarTexto(armario.tipo) === 'visitante') {
                             confirmarLiberacaoVisitante(armario.id);
                         } else {
-                            abrirModalLiberacao(armario.id, armario.tipo);
+                            confirmarLiberacaoAcompanhante(armario.id);
                         }
                     } else if (result.isDenied) {
                         abrirMovimentacoes(armario.id);
@@ -6124,7 +5950,7 @@
                         await abrirMovimentacoes(id);
                         break;
                     case 'encerrar':
-                        await abrirModalLiberacao(id, 'acompanhante');
+                        await confirmarLiberacaoAcompanhante(id);
                         break;
                     case 'ver-pdf':
                         evento.preventDefault();
@@ -6157,6 +5983,18 @@
                 return;
             }
             const termo = resultado.data;
+            const metodoFinalNormalizado = normalizarTexto(termo.metodoFinal);
+            let metodoEncerramentoHtml = '';
+            if (termo.metodoFinal) {
+                let descricaoMetodo = 'Assinatura digital';
+                if (metodoFinalNormalizado === 'cpf') {
+                    descricaoMetodo = `Confirmação por CPF (${termo.cpfConfirmacao || ''})`;
+                } else if (metodoFinalNormalizado === 'manual') {
+                    descricaoMetodo = 'Finalização manual (sem assinatura digital)';
+                }
+                metodoEncerramentoHtml = `<p><strong>Método de encerramento:</strong> ${descricaoMetodo}</p>`;
+            }
+
             const html = `
                 <p><strong>Paciente:</strong> ${termo.paciente}</p>
                 <p><strong>Prontuário:</strong> ${termo.prontuario}</p>
@@ -6169,7 +6007,7 @@
                 <p><strong>Volumes:</strong> ${termo.descricaoVolumes}</p>
                 <p><strong>Aplicado em:</strong> ${formatarDataHora(termo.aplicadoEm)}</p>
                 ${termo.finalizadoEm ? `<p><strong>Finalizado em:</strong> ${formatarDataHora(termo.finalizadoEm)}</p>` : '<p><strong>Status:</strong> Em andamento</p>'}
-                ${termo.metodoFinal ? `<p><strong>Método de encerramento:</strong> ${termo.metodoFinal === 'cpf' ? 'Confirmação por CPF (' + (termo.cpfConfirmacao || '') + ')' : 'Assinatura digital'}</p>` : ''}
+                ${metodoEncerramentoHtml}
             `;
             Swal.fire({
                 title: `Termo - Armário ${armario.numero}`,
@@ -6217,158 +6055,60 @@
             }
             await liberarArmario(id, 'visitante');
         }
-        async function abrirModalLiberacao(id, tipo) {
+        async function confirmarLiberacaoAcompanhante(id) {
             const armario = obterArmarioPorId(id);
-            if (!armario || armario.status === 'livre') return;
-            liberacaoArmarioAtual = id;
-            liberacaoTipoAtual = (tipo || armario.tipo || 'acompanhante').toString().trim().toLowerCase();
-            elementos.liberacaoArmario.textContent = armario.numero;
-            elementos.liberacaoDetalhes.innerHTML = `
-                <p><strong>${armario.tipo === 'acompanhante' ? 'Acompanhante' : 'Visitante'}:</strong> ${armario.nomeVisitante}</p>
-                <p><strong>Paciente:</strong> ${armario.nomePaciente}</p>
-                <p><strong>Leito:</strong> ${armario.leito}</p>
-                <p><strong>Volumes:</strong> ${armario.volumes}</p>
-                ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
+            if (!armario) {
+                mostrarErro('Armário não encontrado para liberação.');
+                return;
+            }
+
+            const resumoHtml = `
+                <div class="info-box" style="text-align:left;">
+                    <p><strong>Acompanhante:</strong> ${armario.nomeVisitante || '-'}</p>
+                    <p><strong>Paciente:</strong> ${armario.nomePaciente || '-'}</p>
+                    <p><strong>Leito:</strong> ${armario.leito || '-'}</p>
+                    <p><strong>Volumes:</strong> ${armario.volumes || '-'}</p>
+                    <p><strong>Início:</strong> ${armario.horaInicio || '-'}</p>
+                    ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
+                </div>
             `;
-            elementos.liberacaoSlider.value = 0;
-            elementos.liberacaoCheckbox.checked = false;
-            elementos.cpfConfirmacao.value = '';
-            assinaturaDesenhada = false;
-            desenhandoAssinatura = false;
-            liberacaoRequisitosOk = false;
-            elementos.liberacaoBtnConfirmar.classList.add('btn-disabled');
-            elementos.liberacaoBtnConfirmar.setAttribute('aria-disabled', 'true');
-            elementos.liberacaoData.textContent = new Date().toLocaleDateString('pt-BR');
-            elementos.liberacaoMetodoRadios.forEach(radio => {
-                radio.checked = radio.value === 'assinatura';
+
+            const resultadoConfirmacao = await Swal.fire({
+                title: `Encerrar armário ${armario.numero}?`,
+                html: `${resumoHtml}<p style="margin-top:12px; color:#4b5563;">Confirme que as informações estão corretas para finalizar o armário do acompanhante.</p>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Confirmo a liberação',
+                cancelButtonText: 'Cancelar',
+                focusConfirm: false
             });
-            elementos.liberacaoModal.style.display = 'flex';
-            await aguardarProximoFrame();
-            inicializarCanvasAssinatura();
-            alternarMetodoLiberacao();
-        }
-        function fecharModalLiberacao() {
-            elementos.liberacaoModal.style.display = 'none';
-            liberacaoArmarioAtual = null;
-            liberacaoTipoAtual = 'acompanhante';
-        }
-        function alternarMetodoLiberacao() {
-            const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
-            if (metodo === 'assinatura') {
-                elementos.assinaturaArea.style.display = 'block';
-                elementos.cpfArea.style.display = 'none';
-                limparAssinatura();
-            } else {
-                elementos.assinaturaArea.style.display = 'none';
-                elementos.cpfArea.style.display = 'block';
-            }
-            atualizarEstadoLiberacao();
-        }
-        function limparAssinatura() {
-            const canvas = elementos.assinaturaCanvas;
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            assinaturaDesenhada = false;
-            atualizarEstadoLiberacao();
-        }
-        function obterPosicaoAssinatura(evento) {
-            const rect = elementos.assinaturaCanvas.getBoundingClientRect();
-            return {
-                x: evento.clientX - rect.left,
-                y: evento.clientY - rect.top
-            };
-        }
-        function iniciarAssinatura(evento) {
-            if ((document.querySelector('input[name="liberacao-metodo"]:checked')?.value || '') !== 'assinatura') {
+
+            if (!resultadoConfirmacao.isConfirmed) {
                 return;
             }
-            evento.preventDefault();
-            desenhandoAssinatura = true;
-            const ctx = elementos.assinaturaCanvas.getContext('2d');
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#0b1324';
-            const pos = obterPosicaoAssinatura(evento);
-            ctx.beginPath();
-            ctx.moveTo(pos.x, pos.y);
-        }
-        function desenharAssinatura(evento) {
-            if (!desenhandoAssinatura) return;
-            evento.preventDefault();
-            const ctx = elementos.assinaturaCanvas.getContext('2d');
-            const pos = obterPosicaoAssinatura(evento);
-            ctx.lineTo(pos.x, pos.y);
-            ctx.stroke();
-            assinaturaDesenhada = true;
-            atualizarEstadoLiberacao();
-        }
-        function finalizarAssinatura(evento) {
-            if (!desenhandoAssinatura) return;
-            evento.preventDefault();
-            desenhandoAssinatura = false;
-            assinaturaDesenhada = true;
-            atualizarEstadoLiberacao();
-        }
-        function obterEstadoLiberacao() {
-            const sliderValor = parseInt(elementos.liberacaoSlider.value, 10);
-            const sliderMaximo = parseInt(elementos.liberacaoSlider.max, 10);
-            const sliderOk = sliderValor === sliderMaximo;
-            const checkboxOk = elementos.liberacaoCheckbox.checked;
-            const metodo = document.querySelector('input[name="liberacao-metodo"]:checked')?.value || 'assinatura';
-            const assinaturaOk = metodo === 'assinatura'
-                ? assinaturaDesenhada
-                : elementos.cpfConfirmacao.value.trim().length === 5;
-            return { sliderOk, checkboxOk, assinaturaOk, metodo };
-        }
-        function atualizarEstadoLiberacao() {
-            const estado = obterEstadoLiberacao();
-            liberacaoRequisitosOk = estado.sliderOk && estado.checkboxOk && estado.assinaturaOk;
-            elementos.liberacaoBtnConfirmar.classList.toggle('btn-disabled', !liberacaoRequisitosOk);
-            elementos.liberacaoBtnConfirmar.setAttribute('aria-disabled', String(!liberacaoRequisitosOk));
-        }
-        async function confirmarLiberacao() {
-            if (liberacaoArmarioAtual === null) return;
-            const armarioId = liberacaoArmarioAtual;
-            const estado = obterEstadoLiberacao();
-            if (!estado.sliderOk || !estado.checkboxOk || !estado.assinaturaOk) {
-                const mensagens = [];
-                if (!estado.sliderOk) {
-                    mensagens.push('Deslize o controle totalmente para a direita para confirmar a identificação.');
+
+            const metodo = 'manual';
+            const confirmacao = '';
+            let mensagemSucesso = 'Termo finalizado e armário liberado com sucesso';
+
+            Swal.fire({
+                title: 'Processando liberação...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
                 }
-                if (!estado.checkboxOk) {
-                    mensagens.push('Marque a declaração de ciência antes de continuar.');
-                }
-                if (!estado.assinaturaOk) {
-                    mensagens.push(estado.metodo === 'assinatura'
-                        ? 'Colete a assinatura digital do responsável para prosseguir.'
-                        : 'Informe os 5 primeiros dígitos do CPF para confirmar a identidade.');
-                }
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Atenção',
-                    html: mensagens.map(msg => `<p style="margin:6px 0;">${msg}</p>`).join(''),
-                    confirmButtonText: 'Entendi'
-                });
-                return;
-            }
-            const finalizarLoading = iniciarLoadingBotao(elementos.liberacaoBtnConfirmar);
-            const metodo = estado.metodo;
-            const assinaturaFinal = metodo === 'assinatura'
-                ? elementos.assinaturaCanvas?.toDataURL('image/png').replace('data:image/png;base64,', '') || ''
-                : '';
-            const confirmacao = metodo === 'cpf' ? elementos.cpfConfirmacao.value.trim() : '';
+            });
 
             try {
                 const resultadoFinalizacao = await callGoogleScript('finalizarTermo', {
-                    armarioId,
+                    armarioId: id,
                     metodo,
-                    assinaturaFinal,
+                    assinaturaFinal: '',
                     confirmacao
                 });
 
-                let mensagemSucesso = 'Termo finalizado e armário liberado com sucesso';
                 if (!resultadoFinalizacao.success) {
                     const mensagemErro = (resultadoFinalizacao.error || '').toString();
                     const erroNormalizado = mensagemErro.toLowerCase();
@@ -6377,6 +6117,7 @@
                         || erroSemAcento.includes('termo nao localizado');
 
                     if (!termoNaoEncontrado) {
+                        Swal.close();
                         notificarErroPadrao(resultadoFinalizacao, 'Não foi possível finalizar o termo.');
                         return;
                     }
@@ -6384,26 +6125,28 @@
                     mensagemSucesso = 'Armário liberado com sucesso. Termo não localizado para finalização.';
                 }
 
-                const resultado = await callGoogleScript('liberarArmario', {
-                    id: armarioId,
-                    tipo: liberacaoTipoAtual
+                const resultadoLiberacao = await callGoogleScript('liberarArmario', {
+                    id,
+                    tipo: 'acompanhante'
                 });
-                if (resultado.success) {
-                    fecharModalLiberacao();
 
-                    // Recarregar dados
+                Swal.close();
+
+                if (resultadoLiberacao.success) {
                     await carregarArmarios({ forcarAtualizacao: true });
                     await carregarEstatisticas();
-                    garantirArmarioLiberadoLocal(armarioId, metodo, confirmacao);
+                    garantirArmarioLiberadoLocal(id, metodo, confirmacao);
                     atualizarResumoDashboardLocal();
                     atualizarInterface();
                     carregarDadosTabelas();
                     mostrarSucesso(mensagemSucesso);
                 } else {
-                    notificarErroPadrao(resultado);
+                    notificarErroPadrao(resultadoLiberacao);
                 }
-            } finally {
-                finalizarLoading();
+            } catch (erro) {
+                Swal.close();
+                console.error('Erro ao liberar armário de acompanhante:', erro);
+                mostrarErro('Não foi possível concluir a liberação. Tente novamente.');
             }
         }
         // Atualizar painel de notificações

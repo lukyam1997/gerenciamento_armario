@@ -2701,6 +2701,8 @@ function criarHTMLTermo(dadosTermo) {
   var assinaturaFinalHtml = '';
   if (dadosTermo.metodoFinal === 'cpf' && dadosTermo.cpfFinal) {
     assinaturaFinalHtml = '<div class="assinatura-linha">Confirmação por CPF: ' + dadosTermo.cpfFinal + '</div>';
+  } else if (dadosTermo.metodoFinal === 'manual') {
+    assinaturaFinalHtml = '<div class="assinatura-linha">Finalização manual registrada no sistema.</div>';
   } else if (dadosTermo.assinaturaFinal) {
     assinaturaFinalHtml = '<img src="data:image/png;base64,' + dadosTermo.assinaturaFinal + '" class="assinatura-img" alt="Assinatura final" />';
   } else {
