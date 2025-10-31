@@ -2316,7 +2316,8 @@ function normalizarAssinaturas(valor) {
     final: '',
     metodoFinal: '',
     cpfFinal: '',
-    finalizadoEm: ''
+    finalizadoEm: '',
+    responsavelFinalizacao: ''
   };
 
   if (!valor) {
@@ -2331,6 +2332,7 @@ function normalizarAssinaturas(valor) {
       info.metodoFinal = json.metodoFinal || '';
       info.cpfFinal = json.cpfFinal || '';
       info.finalizadoEm = json.finalizadoEm || '';
+      info.responsavelFinalizacao = json.responsavelFinalizacao || '';
       return info;
     } catch (erro) {
       info.inicial = valor;
@@ -2344,6 +2346,7 @@ function normalizarAssinaturas(valor) {
     info.metodoFinal = valor.metodoFinal || '';
     info.cpfFinal = valor.cpfFinal || '';
     info.finalizadoEm = valor.finalizadoEm || '';
+    info.responsavelFinalizacao = valor.responsavelFinalizacao || '';
   }
 
   return info;
@@ -2535,6 +2538,31 @@ function finalizarTermo(dados) {
     assinaturas.cpfFinal = metodo === 'cpf' ? confirmacao : '';
     assinaturas.finalizadoEm = finalizacaoIso;
     assinaturas.final = metodo === 'assinatura' ? assinaturaFinal : '';
+    var responsavelFinalizacao = '';
+    if (dados.usuarioResponsavel) {
+      responsavelFinalizacao = dados.usuarioResponsavel.toString().trim();
+    }
+    if (!responsavelFinalizacao) {
+      try {
+        var usuarioAtivo = Session.getActiveUser();
+        if (usuarioAtivo && typeof usuarioAtivo.getEmail === 'function') {
+          responsavelFinalizacao = usuarioAtivo.getEmail();
+        }
+      } catch (erroUsuarioAtivo) {
+        // Ignora falha ao obter usuário ativo
+      }
+    }
+    if (!responsavelFinalizacao) {
+      try {
+        var usuarioEfetivo = Session.getEffectiveUser();
+        if (usuarioEfetivo && typeof usuarioEfetivo.getEmail === 'function') {
+          responsavelFinalizacao = usuarioEfetivo.getEmail();
+        }
+      } catch (erroUsuarioEfetivo) {
+        // Ignora falha ao obter usuário efetivo
+      }
+    }
+    assinaturas.responsavelFinalizacao = responsavelFinalizacao;
 
     var movimentacoesResultado = getMovimentacoes({ armarioId: armarioId });
     var movimentacoes = [];
@@ -2567,6 +2595,7 @@ function finalizarTermo(dados) {
       assinaturaFinal: assinaturas.final,
       metodoFinal: assinaturas.metodoFinal,
       cpfFinal: assinaturas.cpfFinal,
+      responsavelFinalizacao: assinaturas.responsavelFinalizacao,
       movimentacoes: movimentacoes
     };
 
@@ -2669,6 +2698,19 @@ function criarHTMLTermo(dadosTermo) {
   var volumesLista = Array.isArray(dadosTermo.volumes) ? dadosTermo.volumes : [];
   var movimentacoesLista = Array.isArray(dadosTermo.movimentacoes) ? dadosTermo.movimentacoes : [];
 
+  function formatarDataHoraCompleta(data) {
+    if (!data) return 'Não informada';
+    try {
+      var date = new Date(data);
+      if (isNaN(date.getTime())) {
+        return data;
+      }
+      return Utilities.formatDate(date, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm');
+    } catch (erro) {
+      return data;
+    }
+  }
+
   function formatarMovimentacao(mov) {
     var data = mov.data ? new Date(mov.data) : null;
     var hora = mov.hora ? new Date('1970-01-01T' + mov.hora + 'Z') : null;
@@ -2692,6 +2734,13 @@ function criarHTMLTermo(dadosTermo) {
   var movimentosNormalizados = movimentacoesLista.map(formatarMovimentacao);
   while (movimentosNormalizados.length < 8) {
     movimentosNormalizados.push({ data: '', hora: '', tipo: '', descricao: '', responsavel: '' });
+  }
+  var dataDevolucaoTexto = dadosTermo.finalizadoEm
+    ? formatarDataHoraCompleta(dadosTermo.finalizadoEm)
+    : '__________________________';
+  var conferenteTexto = (dadosTermo.responsavelFinalizacao || '').toString().trim();
+  if (!conferenteTexto) {
+    conferenteTexto = '__________________________';
   }
 
   var assinaturaInicialHtml = dadosTermo.assinaturaInicial
@@ -2799,7 +2848,7 @@ function criarHTMLTermo(dadosTermo) {
   partes.push('  </tbody>');
   partes.push('</table>');
   partes.push('<div class="section-title">Devolução de pertences</div>');
-  partes.push('<div class="devolucao-box">Data: _____________ &nbsp;&nbsp; Conferente: __________________________</div>');
+  partes.push('<div class="devolucao-box">Data: ' + dataDevolucaoTexto + ' &nbsp;&nbsp; Conferente: ' + conferenteTexto + '</div>');
   partes.push('<div class="section-title">Descarte de pertences</div>');
   partes.push('<div class="descarte-box">');
   partes.push('  <p>Declaramos que o descarte dos devidos esclarecimentos por parte da equipe do ' + hospitalNome + ' sobre os pertences deixados pelo paciente.</p>');
@@ -2811,7 +2860,7 @@ function criarHTMLTermo(dadosTermo) {
   partes.push('  <div class="section-title">Assinatura de encerramento</div>');
   partes.push(assinaturaFinalHtml);
   partes.push('  <div style="margin-top:6px; font-size:12px;">' + (dadosTermo.acompanhante || '') + '</div>');
-  partes.push('  <div style="margin-top:4px; font-size:11px;">Encerrado em: ' + formatarDataParaHTML(dadosTermo.finalizadoEm) + '</div>');
+  partes.push('  <div style="margin-top:4px; font-size:11px;">Encerrado em: ' + formatarDataHoraCompleta(dadosTermo.finalizadoEm) + '</div>');
   partes.push('</div>');
   partes.push('<div class="footer">Documento gerado automaticamente em ' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm') + ' - ' + hospitalNome + '.</div>');
   partes.push('</body>');

@@ -1591,6 +1591,42 @@
             border-bottom-color: transparent;
             animation: spin 0.6s linear infinite;
         }
+        .global-loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.38);
+            backdrop-filter: blur(1.5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 4000;
+        }
+        .global-loading-overlay.is-active {
+            display: flex;
+        }
+        .global-loading-content {
+            background: var(--surface-color);
+            box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+            border-radius: 20px;
+            padding: 28px 36px;
+            min-width: 260px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            text-align: center;
+            color: var(--dark-color);
+            font-weight: 500;
+        }
+        .global-loading-spinner {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 3px solid color-mix(in srgb, var(--primary-color) 72%, white 28%);
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 0.75s linear infinite;
+        }
         .btn-primary:hover {
             background-color: color-mix(in srgb, var(--primary-color) 85%, var(--primary-dark) 15%);
             box-shadow: 0 18px 32px color-mix(in srgb, var(--primary-color) 35%, transparent);
@@ -2550,6 +2586,12 @@
             </div>
         </div>
     </div>
+    <div class="global-loading-overlay" id="global-loading-overlay" role="status" aria-live="assertive" aria-hidden="true">
+        <div class="global-loading-content">
+            <span class="global-loading-spinner" aria-hidden="true"></span>
+            <span id="global-loading-text">Processando...</span>
+        </div>
+    </div>
     <script>
         // URL do Google Apps Script - ATUALIZE COM SUA URL
         const SCRIPT_URL = 'https://script.google.com/a/macros/isgh.org.br/s/AKfycbzbGb6sQR1auYsyTB-kwPos7Cd7swLuTUDiAzzpwTPW2cj76ykYzKYgBDXA-g5ef7pbpw/exec';
@@ -2872,6 +2914,8 @@
             avatarOptions: document.getElementById('avatar-options'),
             avatarUrlInput: document.getElementById('avatar-url'),
             avatarUrlApply: document.getElementById('avatar-url-apply'),
+            globalLoadingOverlay: document.getElementById('global-loading-overlay'),
+            globalLoadingText: document.getElementById('global-loading-text'),
             termoModal: document.getElementById('termo-modal'),
             termoForm: document.getElementById('termo-form'),
             termoModalClose: document.getElementById('termo-modal-close'),
@@ -3815,6 +3859,29 @@
                 const decorrido = Date.now() - inicio;
                 if (decorrido < duracaoMinima) {
                     setTimeout(encerrar, duracaoMinima - decorrido);
+                } else {
+                    encerrar();
+                }
+            };
+        }
+        function mostrarOverlayCarregamento(mensagem = 'Processando...') {
+            if (!elementos.globalLoadingOverlay || !elementos.globalLoadingText) {
+                return () => {};
+            }
+            const overlay = elementos.globalLoadingOverlay;
+            const texto = elementos.globalLoadingText;
+            texto.textContent = mensagem;
+            overlay.classList.add('is-active');
+            overlay.setAttribute('aria-hidden', 'false');
+            const inicio = Date.now();
+            return () => {
+                const encerrar = () => {
+                    overlay.classList.remove('is-active');
+                    overlay.setAttribute('aria-hidden', 'true');
+                };
+                const decorrido = Date.now() - inicio;
+                if (decorrido < 250) {
+                    setTimeout(encerrar, 250 - decorrido);
                 } else {
                     encerrar();
                 }
@@ -5306,13 +5373,17 @@
                         leito: dados.leito,
                         whatsapp: dados.whatsapp
                     };
-                    fecharModalArmario();
+                    let ocultarOverlay = () => {};
                     try {
+                        ocultarOverlay = mostrarOverlayCarregamento('Preparando termo de responsabilidade...');
                         await abrirTermoWizard(id);
+                        fecharModalArmario();
                     } catch (erroTermo) {
                         termoPreCadastro = null;
                         termoCadastroArmario = null;
                         notificarErroPadrao({ error: erroTermo.message || erroTermo.toString() });
+                    } finally {
+                        ocultarOverlay();
                     }
                 } else {
                     const resultado = await callGoogleScript('cadastrarArmario', dados);
@@ -6062,14 +6133,82 @@
                 return;
             }
 
+            let termoDados = null;
+            try {
+                const respostaTermo = await callGoogleScript('getTermo', { armarioId: id });
+                if (respostaTermo.success && respostaTermo.data) {
+                    termoDados = respostaTermo.data;
+                } else if (respostaTermo.error && respostaTermo.error !== 'Termo não encontrado') {
+                    mostrarErro('Não foi possível carregar as informações do termo. Atualize a lista e tente novamente.');
+                    return;
+                }
+            } catch (erroBuscaTermo) {
+                console.error('Erro ao buscar termo para liberação:', erroBuscaTermo);
+                mostrarErro('Não foi possível carregar as informações do termo. Tente novamente.');
+                return;
+            }
+
+            if (termoDados) {
+                armario.nomeVisitante = termoDados.acompanhante || armario.nomeVisitante;
+                armario.nomePaciente = termoDados.paciente || armario.nomePaciente;
+                armario.leito = termoDados.leito || armario.leito;
+                if (termoDados.telefone) {
+                    armario.whatsapp = termoDados.telefone;
+                }
+            }
+
+            const paciente = termoDados?.paciente || armario.nomePaciente || '-';
+            const prontuario = (termoDados?.prontuario || '').toString().trim();
+            const setor = (termoDados?.setor || '').toString().trim();
+            const leito = termoDados?.leito || armario.leito || '';
+            const acompanhante = termoDados?.acompanhante || armario.nomeVisitante || '-';
+            const telefone = (termoDados?.telefone || armario.whatsapp || '').toString().trim();
+            const documento = (termoDados?.documento || '').toString().trim();
+            const parentesco = (termoDados?.parentesco || '').toString().trim();
+            const inicioUso = (armario.horaInicio || '').toString().trim();
+            const aplicadoEmBruto = termoDados?.aplicadoEm ? formatarDataHora(termoDados.aplicadoEm) : '';
+            const aplicadoEm = aplicadoEmBruto && aplicadoEmBruto !== '-' ? aplicadoEmBruto : '';
+            const setorLeito = [setor, leito].map(valor => (valor || '').toString().trim()).filter(Boolean).join(' • ');
+            const volumesResumo = (() => {
+                if (termoDados?.descricaoVolumes) {
+                    return termoDados.descricaoVolumes;
+                }
+                if (Array.isArray(termoDados?.volumes) && termoDados.volumes.length) {
+                    return termoDados.volumes
+                        .map(volume => {
+                            const quantidadeNumero = Number(volume.quantidade);
+                            const quantidadeTexto = Number.isFinite(quantidadeNumero) && quantidadeNumero > 0
+                                ? `${quantidadeNumero}x`
+                                : '';
+                            const descricaoTexto = (volume.descricao || '').toString().trim();
+                            return [quantidadeTexto, descricaoTexto].filter(Boolean).join(' ');
+                        })
+                        .filter(Boolean)
+                        .join('; ');
+                }
+                const valorBruto = armario.volumes;
+                if (valorBruto !== undefined && valorBruto !== null && valorBruto !== '') {
+                    const numero = Number(valorBruto);
+                    if (!Number.isNaN(numero)) {
+                        return numero > 0 ? `${numero} volume(s)` : 'Nenhum volume informado';
+                    }
+                    return valorBruto;
+                }
+                return 'Não informado';
+            })();
+
             const resumoHtml = `
                 <div class="info-box" style="text-align:left;">
-                    <p><strong>Acompanhante:</strong> ${armario.nomeVisitante || '-'}</p>
-                    <p><strong>Paciente:</strong> ${armario.nomePaciente || '-'}</p>
-                    <p><strong>Leito:</strong> ${armario.leito || '-'}</p>
-                    <p><strong>Volumes:</strong> ${armario.volumes || '-'}</p>
-                    <p><strong>Início:</strong> ${armario.horaInicio || '-'}</p>
-                    ${armario.whatsapp ? `<p><strong>WhatsApp:</strong> ${armario.whatsapp}</p>` : ''}
+                    <p><strong>Acompanhante:</strong> ${acompanhante}</p>
+                    <p><strong>Paciente:</strong> ${paciente}</p>
+                    ${prontuario ? `<p><strong>Prontuário:</strong> ${prontuario}</p>` : ''}
+                    ${setorLeito ? `<p><strong>Setor/Leito:</strong> ${setorLeito}</p>` : ''}
+                    <p><strong>Volumes declarados:</strong> ${volumesResumo}</p>
+                    ${inicioUso ? `<p><strong>Início:</strong> ${inicioUso}</p>` : ''}
+                    ${aplicadoEm ? `<p><strong>Aplicado em:</strong> ${aplicadoEm}</p>` : ''}
+                    ${telefone ? `<p><strong>Contato:</strong> ${telefone}</p>` : ''}
+                    ${documento ? `<p><strong>Documento:</strong> ${documento}</p>` : ''}
+                    ${parentesco ? `<p><strong>Parentesco:</strong> ${parentesco}</p>` : ''}
                 </div>
             `;
 
@@ -6090,6 +6229,10 @@
             const metodo = 'manual';
             const confirmacao = '';
             let mensagemSucesso = 'Termo finalizado e armário liberado com sucesso';
+            const usuarioAtual = obterUsuarioAutenticado();
+            const usuarioResponsavel = usuarioAtual
+                ? (usuarioAtual.nome || usuarioAtual.email || '').toString().trim()
+                : '';
 
             Swal.fire({
                 title: 'Processando liberação...',
@@ -6106,7 +6249,8 @@
                     armarioId: id,
                     metodo,
                     assinaturaFinal: '',
-                    confirmacao
+                    confirmacao,
+                    usuarioResponsavel
                 });
 
                 if (!resultadoFinalizacao.success) {
