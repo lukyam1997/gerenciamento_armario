@@ -25,6 +25,31 @@ function normalizarTextoBasico(valor) {
   return texto;
 }
 
+function normalizarNumeroArmario(valor) {
+  if (valor === null || valor === undefined) {
+    return '';
+  }
+  return valor.toString().trim();
+}
+
+function obterChaveNumeroArmario(numero) {
+  var numeroNormalizado = normalizarNumeroArmario(numero);
+  return numeroNormalizado ? numeroNormalizado : '__sem_numero__';
+}
+
+function montarChaveArmarioInterface(tipo, numero, idPlanilha) {
+  var tipoNormalizado = normalizarTextoBasico(tipo) || 'geral';
+  var numeroNormalizado = normalizarNumeroArmario(numero);
+  if (numeroNormalizado) {
+    return tipoNormalizado + ':' + numeroNormalizado;
+  }
+  var idTexto = '';
+  if (idPlanilha !== null && idPlanilha !== undefined) {
+    idTexto = idPlanilha.toString().trim();
+  }
+  return tipoNormalizado + ':id-' + (idTexto || Utilities.getUuid());
+}
+
 function obterEstruturaPlanilha(sheet) {
   var ultimaColuna = sheet.getLastColumn();
   var cabecalhos = ultimaColuna > 0 ? sheet.getRange(1, 1, 1, ultimaColuna).getValues()[0] : [];
@@ -497,10 +522,15 @@ function limparCacheUnidades() {
   limparCaches(montarChaveCache('unidades'));
 }
 
-function limparCacheMovimentacoes(armarioId) {
-  var chaveEspecifica = armarioId !== undefined && armarioId !== null ? montarChaveCache('movimentacoes', armarioId) : null;
+function limparCacheMovimentacoes(armarioId, numeroArmario, tipo) {
+  var idTexto = armarioId !== undefined && armarioId !== null ? armarioId.toString().trim() : '';
+  var numeroTexto = normalizarNumeroArmario(numeroArmario);
+  var tipoTexto = tipo ? normalizarTextoBasico(tipo) : '';
+  var chaveEspecifica = idTexto ? montarChaveCache('movimentacoes', [idTexto, numeroTexto, tipoTexto].join('|')) : null;
+  var chaveLegado = idTexto ? montarChaveCache('movimentacoes', idTexto) : null;
   limparCaches([
     chaveEspecifica,
+    chaveLegado,
     montarChaveCache('movimentacoes', 'todos')
   ]);
 }
@@ -700,7 +730,7 @@ function handlePost(e) {
           .setMimeType(ContentService.MimeType.JSON);
       
       case 'liberarArmario':
-        return ContentService.createTextOutput(JSON.stringify(liberarArmario(e.parameter.id, e.parameter.tipo)))
+        return ContentService.createTextOutput(JSON.stringify(liberarArmario(e.parameter.id, e.parameter.tipo, e.parameter.numero)))
           .setMimeType(ContentService.MimeType.JSON);
       
       case 'getUsuarios':
@@ -822,24 +852,50 @@ function getArmarios(tipo) {
       if (incluirTermos) {
         var termosInfo = obterTermosRegistrados();
         termosInfo.termos.forEach(function(termo) {
-          var chave = termo.armarioId;
-          if (!chave && chave !== 0) {
+          if (!termo) {
             return;
           }
 
-          var termoAtual = termosMap[chave];
-          var termoFinalizado = Boolean(termo.pdfUrl || (termo.assinaturas && termo.assinaturas.finalizadoEm));
+          var chaveId = '';
+          if (termo.armarioId !== null && termo.armarioId !== undefined) {
+            chaveId = termo.armarioId.toString().trim();
+          }
+
+          if (!chaveId) {
+            return;
+          }
+
+          if (!termosMap[chaveId]) {
+            termosMap[chaveId] = {};
+          }
+
+          var numeroChave = obterChaveNumeroArmario(termo.numeroArmario);
+          var termoAtual = termosMap[chaveId][numeroChave];
+          var termoFinalizado = termo.finalizado;
+          if (termoFinalizado === undefined) {
+            var statusTermo = normalizarTextoBasico(termo.status);
+            termoFinalizado = Boolean(termo.pdfUrl || (termo.assinaturas && termo.assinaturas.finalizadoEm) || statusTermo === 'finalizado');
+          }
+
           if (!termoAtual) {
-            termosMap[chave] = termo;
+            termosMap[chaveId][numeroChave] = termo;
             return;
           }
 
-          var atualFinalizado = Boolean(termoAtual.pdfUrl || (termoAtual.assinaturas && termoAtual.assinaturas.finalizadoEm));
+          var atualFinalizado = termoAtual.finalizado;
+          if (atualFinalizado === undefined) {
+            var statusAtual = normalizarTextoBasico(termoAtual.status);
+            atualFinalizado = Boolean(termoAtual.pdfUrl || (termoAtual.assinaturas && termoAtual.assinaturas.finalizadoEm) || statusAtual === 'finalizado');
+          }
 
           if (!termoFinalizado && atualFinalizado) {
-            termosMap[chave] = termo;
-          } else if (termoFinalizado === atualFinalizado && termoAtual.id < termo.id) {
-            termosMap[chave] = termo;
+            termosMap[chaveId][numeroChave] = termo;
+          } else if (termoFinalizado === atualFinalizado) {
+            var idAtualNumero = Number(termoAtual.id) || 0;
+            var idNovoNumero = Number(termo.id) || 0;
+            if (idNovoNumero > idAtualNumero) {
+              termosMap[chaveId][numeroChave] = termo;
+            }
           }
         });
       }
@@ -900,8 +956,8 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
   }
 
   dados.forEach(function(row) {
-    var id = row[idIndex];
-    if (!id && id !== 0) {
+    var idPlanilha = row[idIndex];
+    if (!idPlanilha && idPlanilha !== 0) {
       return;
     }
 
@@ -927,9 +983,14 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
         break;
     }
 
+    var numeroBruto = row[numeroIndex] || '';
+    var numeroNormalizado = normalizarNumeroArmario(numeroBruto);
+    var idInterface = montarChaveArmarioInterface(tipo, numeroNormalizado, idPlanilha);
+
     var armario = {
-      id: id,
-      numero: row[numeroIndex] || '',
+      id: idInterface,
+      idPlanilha: idPlanilha,
+      numero: numeroNormalizado,
       status: status,
       nomeVisitante: obterValorLinha(row, estrutura, nomeChaves, row[nomeIndex] || ''),
       nomePaciente: row[pacienteIndex] || '',
@@ -953,7 +1014,20 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
     armario.volumes = isNaN(volumesNumero) ? 0 : volumesNumero;
 
     if (tipo === 'acompanhante') {
-      var termoRelacionado = termosMap ? termosMap[armario.id] : null;
+      var termosPorId = null;
+      if (termosMap) {
+        var chaveId = idPlanilha !== null && idPlanilha !== undefined ? idPlanilha.toString().trim() : '';
+        termosPorId = chaveId ? termosMap[chaveId] : null;
+      }
+
+      var termoRelacionado = null;
+      if (termosPorId) {
+        var chaveNumero = obterChaveNumeroArmario(numeroNormalizado);
+        termoRelacionado = termosPorId[chaveNumero] || null;
+        if (!termoRelacionado && chaveNumero !== '__sem_numero__') {
+          termoRelacionado = termosPorId['__sem_numero__'] || null;
+        }
+      }
       if (termoRelacionado) {
         var statusTermoNormalizado = normalizarTextoBasico(termoRelacionado.status);
         var termoFinalizado = statusTermoNormalizado === 'finalizado';
@@ -1031,7 +1105,10 @@ function cadastrarArmario(armarioData) {
     var data = sheet.getRange(2, 1, totalLinhas - 1, totalColunas).getValues();
     var linhaPlanilha = -1;
     var linhaAtual = null;
-    var idNumerico = Number(armarioData.id);
+    var idParametroBruto = armarioData.idPlanilha !== undefined && armarioData.idPlanilha !== ''
+      ? armarioData.idPlanilha
+      : armarioData.id;
+    var idNumerico = Number(idParametroBruto);
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
     var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
     var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
@@ -1141,10 +1218,12 @@ function cadastrarArmario(armarioData) {
   }
 }
 
-function liberarArmario(id, tipo) {
+function liberarArmario(id, tipo, numero) {
   try {
     var tipoNormalizado = normalizarTextoBasico(tipo);
     var ehAcompanhante = tipoNormalizado === 'acompanhante';
+    var idComparacao = id !== null && id !== undefined ? id.toString().trim() : '';
+    var numeroInformado = normalizarNumeroArmario(numero);
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetName = ehAcompanhante ? 'Acompanhantes' : 'Visitantes';
@@ -1152,11 +1231,11 @@ function liberarArmario(id, tipo) {
     var historicoSheet = ss.getSheetByName(
       ehAcompanhante ? 'Histórico Acompanhantes' : 'Histórico Visitantes'
     );
-    
+
     if (!sheet || !historicoSheet) {
       return { success: false, error: 'Abas não encontradas' };
     }
-    
+
     // Encontrar o armário na aba atual
     var estrutura = obterEstruturaPlanilha(sheet);
     var totalColunas = estrutura.ultimaColuna || (sheetName === 'Visitantes' ? 13 : 12);
@@ -1164,23 +1243,51 @@ function liberarArmario(id, tipo) {
     if (totalLinhas <= 1) {
       return { success: false, error: 'Nenhum armário cadastrado' };
     }
+
     var data = sheet.getRange(2, 1, totalLinhas - 1, totalColunas).getValues();
     var armarioIndex = -1;
     var armarioData = null;
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
     var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
+    var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
 
-    data.forEach(function(row, index) {
-      if (row[idIndex] == id) {
-        armarioIndex = index;
-        armarioData = row.slice();
+    for (var idx = 0; idx < data.length; idx++) {
+      var row = data[idx];
+      var idLinha = row[idIndex];
+      var idLinhaTexto = idLinha !== null && idLinha !== undefined ? idLinha.toString().trim() : '';
+
+      if (idComparacao && idLinhaTexto !== idComparacao) {
+        continue;
       }
-    });
-    
-    if (armarioIndex === -1) {
+
+      if (numeroInformado) {
+        var numeroLinha = obterValorLinha(row, estrutura, 'numero', row[numeroIndex]);
+        if (numeroInformado !== normalizarNumeroArmario(numeroLinha)) {
+          continue;
+        }
+      }
+
+      armarioIndex = idx;
+      armarioData = row.slice();
+      break;
+    }
+
+    if (armarioIndex === -1 && numeroInformado) {
+      for (var indice = 0; indice < data.length; indice++) {
+        var linhaAtual = data[indice];
+        var numeroLinhaBusca = obterValorLinha(linhaAtual, estrutura, 'numero', linhaAtual[numeroIndex]);
+        if (numeroInformado === normalizarNumeroArmario(numeroLinhaBusca)) {
+          armarioIndex = indice;
+          armarioData = linhaAtual.slice();
+          break;
+        }
+      }
+    }
+
+    if (armarioIndex === -1 || !armarioData) {
       return { success: false, error: 'Armário não encontrado' };
     }
-    
+
     var linha = armarioIndex + 2;
 
     var statusPadrao = (statusIndex !== null && statusIndex !== undefined && statusIndex < armarioData.length)
@@ -1224,8 +1331,11 @@ function liberarArmario(id, tipo) {
       ? historicoSheet.getRange(2, 1, historicoLastRow - 1, 13).getValues()
       : [];
     var historicoIndex = -1;
-    var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
     var numeroArmario = obterValorLinha(armarioData, estrutura, 'numero', armarioData[numeroIndex]);
+    numeroArmario = numeroArmario ? numeroArmario.toString().trim() : '';
+    if (!numeroArmario) {
+      numeroArmario = numeroInformado;
+    }
 
     for (var i = historicoData.length - 1; i >= 0; i--) {
       if (historicoData[i][2] === numeroArmario && historicoData[i][9] === 'EM USO') {
@@ -1240,14 +1350,14 @@ function liberarArmario(id, tipo) {
       historicoSheet.getRange(historicoLinha, 9).setValue(horaFim); // Hora fim
       historicoSheet.getRange(historicoLinha, 10).setValue('FINALIZADO'); // Status
     }
-    
+
     registrarLog('LIBERAÇÃO', `Armário ${numeroArmario} liberado`);
 
     limparCacheArmarios();
     limparCacheHistorico();
 
     return { success: true, message: 'Armário liberado com sucesso' };
-    
+
   } catch (error) {
     registrarLog('ERRO', `Erro ao liberar armário: ${error.toString()}`);
     return { success: false, error: error.toString() };
@@ -2088,6 +2198,7 @@ function salvarTermoCompleto(dadosTermo) {
     dadosTermo.orientacoes = orientacoes;
     dadosTermo.volumes = volumes;
     dadosTermo.descricaoVolumes = descricaoVolumes;
+    var numeroInformado = normalizarNumeroArmario(dadosTermo.numeroArmario);
 
     // 1. Salvar na aba "Termos de Responsabilidade"
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2104,13 +2215,25 @@ function salvarTermoCompleto(dadosTermo) {
     var aplicadoEm = aplicadoEmAtual;
 
     for (var i = dadosExistentes.length - 1; i >= 1; i--) {
-      if (dadosExistentes[i][1] == dadosTermo.armarioId) {
-        if (!dadosExistentes[i][17]) { // Termo ainda não finalizado
-          linhaExistente = i + 1;
-          termoId = dadosExistentes[i][0];
-          aplicadoEm = converterParaDataHoraIso(dadosExistentes[i][16], aplicadoEmAtual);
-          break;
-        }
+      var idLinha = dadosExistentes[i][1];
+      if (String(idLinha) !== String(dadosTermo.armarioId)) {
+        continue;
+      }
+
+      var numeroLinha = dadosExistentes[i][2] ? dadosExistentes[i][2].toString().trim() : '';
+      if (numeroInformado && normalizarNumeroArmario(numeroLinha) !== numeroInformado) {
+        continue;
+      }
+
+      var assinaturasExistentes = normalizarAssinaturas(dadosExistentes[i][18]);
+      var statusLinha = normalizarTextoBasico(dadosExistentes[i][19]);
+      var finalizado = Boolean(dadosExistentes[i][17] || statusLinha === 'finalizado' || (assinaturasExistentes && assinaturasExistentes.finalizadoEm));
+
+      if (!finalizado) {
+        linhaExistente = i + 1;
+        termoId = dadosExistentes[i][0];
+        aplicadoEm = converterParaDataHoraIso(dadosExistentes[i][16], aplicadoEmAtual);
+        break;
       }
     }
 
@@ -2144,7 +2267,7 @@ function salvarTermoCompleto(dadosTermo) {
     var assinaturasInfo = normalizarAssinaturas(valorAtualAssinatura);
     assinaturasInfo.inicial = dadosTermo.assinaturaBase64 || assinaturasInfo.inicial || '';
 
-    var numeroArmarioOficial = dadosTermo.numeroArmario ? dadosTermo.numeroArmario.toString().trim() : '';
+    var numeroArmarioOficial = numeroInformado;
 
     var sheetAcompanhantes = ss.getSheetByName('Acompanhantes');
     var dadosAcompanhantes = [];
@@ -2393,11 +2516,17 @@ function obterTermosRegistrados() {
       }
     }
 
+    var numeroArmarioValor = data[i][2] ? data[i][2].toString().trim() : '';
+    var statusBruto = data[i][19] || '';
+    var statusNormalizado = normalizarTextoBasico(statusBruto);
+    var possuiPdf = Boolean(data[i][17]);
+    var finalizado = Boolean(possuiPdf || statusNormalizado === 'finalizado' || (assinaturas && assinaturas.finalizadoEm));
+
     termos.push({
       linha: i + 1,
       id: data[i][0],
       armarioId: data[i][1],
-      numeroArmario: data[i][2],
+      numeroArmario: numeroArmarioValor,
       paciente: data[i][3],
       prontuario: data[i][4],
       nascimento: data[i][5],
@@ -2414,7 +2543,10 @@ function obterTermosRegistrados() {
       aplicadoEm: data[i][16],
       pdfUrl: data[i][17],
       assinaturas: assinaturas,
-      status: data[i][19] || ''
+      status: statusBruto,
+      statusNormalizado: statusNormalizado,
+      finalizado: finalizado,
+      possuiPdf: possuiPdf
     });
   }
 
@@ -2438,54 +2570,94 @@ function getTermo(dados) {
     
     var data = sheet.getDataRange().getValues();
     var termo = null;
-    
-    for (var i = data.length - 1; i >= 1; i--) {
-      if (data[i][1] == dados.armarioId) {
-        var assinaturas = normalizarAssinaturas(data[i][18]);
-        var orientacoesSalvas = data[i][13] ? data[i][13].split(',').filter(String) : [];
-        var volumesSalvos = [];
-        if (data[i][14]) {
-          try {
-            volumesSalvos = JSON.parse(data[i][14]);
-          } catch (erroVolumes) {
-            volumesSalvos = [];
-          }
-        }
+    var termoFinalizadoMaisRecente = null;
+    var armarioIdInformado = dados.armarioId !== null && dados.armarioId !== undefined
+      ? dados.armarioId.toString().trim()
+      : '';
+    var numeroInformado = normalizarNumeroArmario(dados.numeroArmario);
+    var incluirFinalizados = converterParaBoolean(dados.incluirFinalizados);
 
-        termo = {
-          id: data[i][0],
-          armarioId: data[i][1],
-          numeroArmario: data[i][2],
-          paciente: data[i][3],
-          prontuario: data[i][4],
-          nascimento: data[i][5],
-          setor: data[i][6],
-          leito: data[i][7],
-          consciente: data[i][8],
-          acompanhante: data[i][9],
-          telefone: data[i][10],
-          documento: data[i][11],
-          parentesco: data[i][12],
-          orientacoes: orientacoesSalvas,
-          volumes: Array.isArray(volumesSalvos) ? volumesSalvos : [],
-          descricaoVolumes: data[i][15],
-          aplicadoEm: data[i][16],
-          pdfUrl: data[i][17],
-          assinaturaBase64: assinaturas.inicial,
-          assinaturas: assinaturas,
-          finalizadoEm: assinaturas.finalizadoEm,
-          metodoFinal: assinaturas.metodoFinal,
-          cpfConfirmacao: assinaturas.cpfFinal,
-          status: data[i][19] || ''
-        };
+    for (var i = data.length - 1; i >= 1; i--) {
+      var idLinha = data[i][1];
+      var idLinhaTexto = idLinha !== null && idLinha !== undefined ? idLinha.toString().trim() : '';
+      if (armarioIdInformado && idLinhaTexto !== armarioIdInformado) {
+        continue;
+      }
+
+      var numeroLinha = data[i][2] ? data[i][2].toString().trim() : '';
+      var numeroLinhaNormalizado = normalizarNumeroArmario(numeroLinha);
+      if (numeroInformado && numeroLinhaNormalizado !== numeroInformado) {
+        continue;
+      }
+
+      var assinaturas = normalizarAssinaturas(data[i][18]);
+      var orientacoesSalvas = data[i][13] ? data[i][13].split(',').filter(String) : [];
+      var volumesSalvos = [];
+      if (data[i][14]) {
+        try {
+          volumesSalvos = JSON.parse(data[i][14]);
+        } catch (erroVolumes) {
+          volumesSalvos = [];
+        }
+      }
+
+      var statusBruto = data[i][19] || '';
+      var statusNormalizado = normalizarTextoBasico(statusBruto);
+      var possuiPdf = Boolean(data[i][17]);
+      var termoFinalizado = Boolean(possuiPdf || statusNormalizado === 'finalizado' || (assinaturas && assinaturas.finalizadoEm));
+
+      var termoAtual = {
+        id: data[i][0],
+        armarioId: data[i][1],
+        numeroArmario: numeroLinha,
+        paciente: data[i][3],
+        prontuario: data[i][4],
+        nascimento: data[i][5],
+        setor: data[i][6],
+        leito: data[i][7],
+        consciente: data[i][8],
+        acompanhante: data[i][9],
+        telefone: data[i][10],
+        documento: data[i][11],
+        parentesco: data[i][12],
+        orientacoes: orientacoesSalvas,
+        volumes: Array.isArray(volumesSalvos) ? volumesSalvos : [],
+        descricaoVolumes: data[i][15],
+        aplicadoEm: data[i][16],
+        pdfUrl: data[i][17],
+        assinaturaBase64: assinaturas.inicial,
+        assinaturas: assinaturas,
+        finalizadoEm: assinaturas.finalizadoEm,
+        metodoFinal: assinaturas.metodoFinal,
+        cpfConfirmacao: assinaturas.cpfFinal,
+        status: statusBruto,
+        statusNormalizado: statusNormalizado,
+        finalizado: termoFinalizado
+      };
+
+      if (termoFinalizado) {
+        if (incluirFinalizados && !termoFinalizadoMaisRecente) {
+          termoFinalizadoMaisRecente = termoAtual;
+        }
+        if (!incluirFinalizados) {
+          continue;
+        }
+      }
+
+      termo = termoAtual;
+      if (!termoFinalizado) {
         break;
       }
     }
-    
+
+    if (!termo && incluirFinalizados && termoFinalizadoMaisRecente) {
+      termo = termoFinalizadoMaisRecente;
+    }
+
     if (!termo) {
       return { success: false, error: 'Termo não encontrado' };
     }
-    
+
     return { success: true, data: termo };
     
   } catch (error) {
@@ -2504,6 +2676,7 @@ function finalizarTermo(dados) {
     var metodo = (dados.metodo || 'assinatura').toString();
     var confirmacao = dados.confirmacao || '';
     var assinaturaFinal = dados.assinaturaFinal || '';
+    var numeroInformado = normalizarNumeroArmario(dados.numeroArmario);
 
     var termosInfo = obterTermosRegistrados();
     if (!termosInfo.sheet) {
@@ -2511,20 +2684,64 @@ function finalizarTermo(dados) {
     }
 
     var termoEncontrado = null;
+    var termoFinalizadoMaisRecente = null;
     for (var i = termosInfo.termos.length - 1; i >= 0; i--) {
-      if (termosInfo.termos[i].armarioId == armarioId && !termosInfo.termos[i].pdfUrl) {
-        termoEncontrado = termosInfo.termos[i];
+      var termoAtual = termosInfo.termos[i];
+      if (!termoAtual) {
+        continue;
+      }
+
+      if (termoAtual.armarioId != armarioId) {
+        continue;
+      }
+
+      var numeroTermo = normalizarNumeroArmario(termoAtual.numeroArmario);
+      if (numeroInformado && numeroTermo !== numeroInformado) {
+        continue;
+      }
+
+      var statusNormalizado = normalizarTextoBasico(termoAtual.status || termoAtual.statusNormalizado || '');
+      var finalizado = termoAtual.finalizado;
+      if (finalizado === undefined) {
+        finalizado = Boolean(termoAtual.pdfUrl || (termoAtual.assinaturas && termoAtual.assinaturas.finalizadoEm) || statusNormalizado === 'finalizado');
+      }
+
+      if (finalizado) {
+        if (!termoFinalizadoMaisRecente) {
+          termoFinalizadoMaisRecente = termoAtual;
+        }
+        continue;
+      }
+
+      if (!termoAtual.pdfUrl) {
+        termoEncontrado = termoAtual;
         break;
       }
     }
 
     if (!termoEncontrado) {
       for (var j = termosInfo.termos.length - 1; j >= 0; j--) {
-        if (termosInfo.termos[j].armarioId == armarioId) {
-          termoEncontrado = termosInfo.termos[j];
-          break;
+        var termoAtualBusca = termosInfo.termos[j];
+        if (!termoAtualBusca) {
+          continue;
         }
+
+        if (termoAtualBusca.armarioId != armarioId) {
+          continue;
+        }
+
+        var numeroTermoBusca = normalizarNumeroArmario(termoAtualBusca.numeroArmario);
+        if (numeroInformado && numeroTermoBusca !== numeroInformado) {
+          continue;
+        }
+
+        termoEncontrado = termoAtualBusca;
+        break;
       }
+    }
+
+    if (!termoEncontrado && termoFinalizadoMaisRecente) {
+      termoEncontrado = termoFinalizadoMaisRecente;
     }
 
     if (!termoEncontrado) {
@@ -2564,7 +2781,7 @@ function finalizarTermo(dados) {
     }
     assinaturas.responsavelFinalizacao = responsavelFinalizacao;
 
-    var movimentacoesResultado = getMovimentacoes({ armarioId: armarioId });
+    var movimentacoesResultado = getMovimentacoes({ armarioId: armarioId, numeroArmario: numeroInformado });
     var movimentacoes = [];
     if (movimentacoesResultado && movimentacoesResultado.success && Array.isArray(movimentacoesResultado.data)) {
       movimentacoes = movimentacoesResultado.data;
@@ -2884,7 +3101,11 @@ function formatarDataParaHTML(data) {
 function getMovimentacoes(dados) {
   var possuiArmario = dados && dados.armarioId !== undefined && dados.armarioId !== null;
   var armarioId = possuiArmario ? dados.armarioId : null;
-  var chaveCache = montarChaveCache('movimentacoes', possuiArmario ? armarioId : 'todos');
+  var armarioIdTexto = possuiArmario && armarioId !== null && armarioId !== undefined ? armarioId.toString().trim() : '';
+  var numeroInformado = normalizarNumeroArmario(dados ? dados.numeroArmario : '');
+  var tipoInformado = dados && dados.tipo ? normalizarTextoBasico(dados.tipo) : '';
+  var chaveIdentificacao = possuiArmario ? [armarioIdTexto, numeroInformado, tipoInformado].join('|') : 'todos';
+  var chaveCache = montarChaveCache('movimentacoes', chaveIdentificacao);
 
   return executarComCache(chaveCache, CACHE_TTL_MOVIMENTACOES, function() {
     try {
@@ -2903,11 +3124,22 @@ function getMovimentacoes(dados) {
       }
 
       for (var i = 1; i < data.length; i++) {
-        if (data[i][1] == armarioId) {
-          movimentacoes.push({
-            id: data[i][0],
-            armarioId: data[i][1],
-            numeroArmario: data[i][2],
+        var idLinha = data[i][1];
+        if (armarioIdTexto && String(idLinha) !== armarioIdTexto) {
+          continue;
+        }
+
+        if (numeroInformado) {
+          var numeroLinha = data[i][2] ? data[i][2].toString().trim() : '';
+          if (normalizarNumeroArmario(numeroLinha) !== numeroInformado) {
+            continue;
+          }
+        }
+
+        movimentacoes.push({
+          id: data[i][0],
+          armarioId: data[i][1],
+          numeroArmario: data[i][2],
             tipo: data[i][3],
             descricao: data[i][4],
             responsavel: data[i][5],
@@ -2937,17 +3169,28 @@ function salvarMovimentacao(dados) {
     }
     
     // Buscar número do armário
-    var armarioSheet = ss.getSheetByName('Acompanhantes');
-    var armarioData = armarioSheet.getDataRange().getValues();
-    var numeroArmario = '';
-    
-    for (var i = 1; i < armarioData.length; i++) {
-      if (armarioData[i][0] == dados.armarioId) {
-        numeroArmario = armarioData[i][1];
-        break;
+    var tipoNormalizado = normalizarTextoBasico(dados.tipo);
+    var numeroArmario = normalizarNumeroArmario(dados.numeroArmario);
+    if (!numeroArmario) {
+      var nomeSheetArmario = tipoNormalizado === 'visitante' ? 'Visitantes' : 'Acompanhantes';
+      var armarioSheet = ss.getSheetByName(nomeSheetArmario);
+      if (armarioSheet) {
+        var estruturaArmario = obterEstruturaPlanilha(armarioSheet);
+        var totalLinhasArmario = armarioSheet.getLastRow();
+        if (totalLinhasArmario > 1) {
+          var dadosArmario = armarioSheet.getRange(2, 1, totalLinhasArmario - 1, estruturaArmario.ultimaColuna || (nomeSheetArmario === 'Visitantes' ? 13 : 12)).getValues();
+          for (var i = 0; i < dadosArmario.length; i++) {
+            var linha = dadosArmario[i];
+            if (String(linha[0]) === String(dados.armarioId)) {
+              var numeroLinha = obterValorLinha(linha, estruturaArmario, 'numero', linha[1]);
+              numeroArmario = numeroLinha ? numeroLinha.toString().trim() : '';
+              break;
+            }
+          }
+        }
       }
     }
-    
+
     var lastRow = sheet.getLastRow();
     var novoId = lastRow > 1 ? Math.max(...sheet.getRange(2, 1, sheet.getLastRow()-1, 1).getValues().flat()) + 1 : 1;
     
@@ -2964,12 +3207,12 @@ function salvarMovimentacao(dados) {
       dados.hora,
       registroMovimento
     ];
-    
+
     sheet.getRange(lastRow + 1, 1, 1, 9).setValues([novaLinha]);
 
     registrarLog('MOVIMENTAÇÃO', `Movimentação registrada para armário ${numeroArmario}`);
 
-    limparCacheMovimentacoes(dados.armarioId);
+    limparCacheMovimentacoes(dados.armarioId, numeroArmario, tipoNormalizado);
 
     return { success: true, message: 'Movimentação registrada com sucesso', id: novoId };
     
