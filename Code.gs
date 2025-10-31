@@ -44,8 +44,23 @@ function obterEstruturaPlanilha(sheet) {
 }
 
 function obterIndiceColuna(estrutura, chave, padrao) {
-  if (estrutura.mapaIndices.hasOwnProperty(chave)) {
-    return estrutura.mapaIndices[chave];
+  if (Array.isArray(chave)) {
+    for (var i = 0; i < chave.length; i++) {
+      var indiceFlexivel = obterIndiceColuna(estrutura, chave[i], null);
+      if (indiceFlexivel !== null && indiceFlexivel !== undefined) {
+        return indiceFlexivel;
+      }
+    }
+    return padrao;
+  }
+
+  if (chave === null || chave === undefined) {
+    return padrao;
+  }
+
+  var chaveNormalizada = normalizarTextoBasico(chave);
+  if (estrutura.mapaIndices.hasOwnProperty(chaveNormalizada)) {
+    return estrutura.mapaIndices[chaveNormalizada];
   }
   return padrao;
 }
@@ -109,6 +124,10 @@ function definirValorLinhaFlexivel(linha, estrutura, chaves, valor) {
 
   return false;
 }
+
+var CABECALHOS_WHATSAPP = ['whatsapp', 'wpp', 'whats app', 'whatsap', 'zap'];
+var CABECALHOS_NOME_VISITANTE = ['nome visitante', 'visitante', 'nome do visitante'];
+var CABECALHOS_NOME_ACOMPANHANTE = ['nome acompanhante', 'acompanhante', 'nome do acompanhante', 'responsavel', 'responsável'];
 
 function converterParaBoolean(valor) {
   if (valor === true || valor === false) {
@@ -859,7 +878,8 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
   var idIndex = obterIndiceColuna(estrutura, 'id', 0);
   var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
   var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
-  var nomeIndex = obterIndiceColuna(estrutura, isVisitante ? 'nome visitante' : 'nome acompanhante', 3);
+  var nomeChaves = isVisitante ? CABECALHOS_NOME_VISITANTE : CABECALHOS_NOME_ACOMPANHANTE;
+  var nomeIndex = obterIndiceColuna(estrutura, nomeChaves, 3);
   var pacienteIndex = obterIndiceColuna(estrutura, 'nome paciente', 4);
   var leitoIndex = obterIndiceColuna(estrutura, 'leito', 5);
   var volumesIndex = obterIndiceColuna(estrutura, 'volumes', 6);
@@ -874,7 +894,7 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
   if (termoIndex === null || termoIndex === undefined) {
     termoIndex = isVisitante ? 11 : 11;
   }
-  var whatsappIndex = obterIndiceColuna(estrutura, 'whatsapp', null);
+  var whatsappIndex = obterIndiceColuna(estrutura, CABECALHOS_WHATSAPP, null);
   if (whatsappIndex === null || whatsappIndex === undefined) {
     whatsappIndex = isVisitante ? 12 : 9;
   }
@@ -911,7 +931,7 @@ function getArmariosFromSheet(sheetName, tipo, termosMap) {
       id: id,
       numero: row[numeroIndex] || '',
       status: status,
-      nomeVisitante: row[nomeIndex] || '',
+      nomeVisitante: obterValorLinha(row, estrutura, nomeChaves, row[nomeIndex] || ''),
       nomePaciente: row[pacienteIndex] || '',
       leito: row[leitoIndex] || '',
       volumes: row[volumesIndex] || 0,
@@ -1061,10 +1081,10 @@ function cadastrarArmario(armarioData) {
     while (novaLinha.length < totalColunas) {
       novaLinha.push('');
     }
-    var nomeColuna = sheetName === 'Visitantes' ? 'nome visitante' : 'nome acompanhante';
+    var nomeChavesCadastro = sheetName === 'Visitantes' ? CABECALHOS_NOME_VISITANTE : CABECALHOS_NOME_ACOMPANHANTE;
 
     definirValorLinha(novaLinha, estrutura, 'status', 'em-uso');
-    definirValorLinha(novaLinha, estrutura, nomeColuna, armarioData.nomeVisitante);
+    definirValorLinha(novaLinha, estrutura, nomeChavesCadastro, armarioData.nomeVisitante);
     definirValorLinha(novaLinha, estrutura, 'nome paciente', armarioData.nomePaciente);
     definirValorLinha(novaLinha, estrutura, 'leito', armarioData.leito);
     definirValorLinha(novaLinha, estrutura, 'volumes', volumes);
@@ -1076,7 +1096,7 @@ function cadastrarArmario(armarioData) {
     }
     definirValorLinha(novaLinha, estrutura, 'data registro', dataRegistro);
     definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
-    definirValorLinha(novaLinha, estrutura, 'whatsapp', whatsapp);
+    definirValorLinha(novaLinha, estrutura, CABECALHOS_WHATSAPP, whatsapp);
     definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
 
     sheet.getRange(linhaPlanilha, 1, 1, totalColunas).setValues([novaLinha]);
@@ -1148,6 +1168,7 @@ function liberarArmario(id, tipo) {
     var armarioIndex = -1;
     var armarioData = null;
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
+    var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
 
     data.forEach(function(row, index) {
       if (row[idIndex] == id) {
@@ -1161,7 +1182,17 @@ function liberarArmario(id, tipo) {
     }
     
     var linha = armarioIndex + 2;
-    
+
+    var statusPadrao = (statusIndex !== null && statusIndex !== undefined && statusIndex < armarioData.length)
+      ? armarioData[statusIndex]
+      : '';
+    var statusAtual = normalizarTextoBasico(
+      obterValorLinha(armarioData, estrutura, 'status', statusPadrao)
+    );
+    if (statusAtual === 'livre') {
+      return { success: false, error: 'Armário já está livre' };
+    }
+
     // Limpar dados do armário (deixar apenas número e status livre)
     var unidadeAtual = obterValorLinha(armarioData, estrutura, 'unidade', '');
     var novaLinha = armarioData.slice();
@@ -1169,7 +1200,7 @@ function liberarArmario(id, tipo) {
       novaLinha.push('');
     }
 
-    var nomeColuna = sheetName === 'Visitantes' ? 'nome visitante' : 'nome acompanhante';
+    var nomeColuna = sheetName === 'Visitantes' ? CABECALHOS_NOME_VISITANTE : CABECALHOS_NOME_ACOMPANHANTE;
     definirValorLinha(novaLinha, estrutura, 'status', 'livre');
     definirValorLinha(novaLinha, estrutura, nomeColuna, '');
     definirValorLinha(novaLinha, estrutura, 'nome paciente', '');
@@ -1181,7 +1212,7 @@ function liberarArmario(id, tipo) {
     }
     var dataHoraAtual = obterDataHoraAtualFormatada();
     definirValorLinha(novaLinha, estrutura, 'data registro', dataHoraAtual.dataHoraIso);
-    definirValorLinha(novaLinha, estrutura, 'whatsapp', '');
+    definirValorLinha(novaLinha, estrutura, CABECALHOS_WHATSAPP, '');
     definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
     definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
 
@@ -2220,7 +2251,7 @@ function salvarTermoCompleto(dadosTermo) {
         var dataRegistroCadastro = dataHoraAtualCadastro.dataHoraIso;
         var unidadeAtual = obterValorLinha(linhaAtualizada, estruturaAcompanhantes, 'unidade', '');
         var whatsappCadastro = cadastroArmario.whatsapp ? cadastroArmario.whatsapp.toString().trim() : '';
-        var nomeColunaCadastro = 'nome acompanhante';
+        var nomeColunaCadastro = CABECALHOS_NOME_ACOMPANHANTE;
 
         definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'status', 'em-uso');
         definirValorLinha(linhaAtualizada, estruturaAcompanhantes, nomeColunaCadastro, cadastroArmario.nomeVisitante || dadosTermo.acompanhante || '');
@@ -2229,7 +2260,7 @@ function salvarTermoCompleto(dadosTermo) {
         definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'hora inicio', horaInicioCadastro);
         definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'hora prevista', '');
         definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'data registro', dataRegistroCadastro);
-        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, 'whatsapp', whatsappCadastro);
+        definirValorLinha(linhaAtualizada, estruturaAcompanhantes, CABECALHOS_WHATSAPP, whatsappCadastro);
 
         // Registrar histórico de uso
         var historicoSheet = ss.getSheetByName('Histórico Acompanhantes');
