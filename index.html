@@ -5557,9 +5557,23 @@
                 atualizarInterface();
                 carregarDadosTabelas();
                 mostrarSucesso('Armário liberado com sucesso');
-            } else {
-                notificarErroPadrao(resultado);
+                return;
             }
+
+            const mensagemErro = (resultado.error || '').toString();
+            const mensagemNormalizada = mensagemErro.toLowerCase();
+
+            if (mensagemNormalizada.includes('já está livre')) {
+                mostrarErro('Este armário já está livre. Atualize a lista para confirmar a situação.');
+                return;
+            }
+
+            if (mensagemNormalizada.includes('não encontrado')) {
+                mostrarErro('Não encontramos este armário. Atualize a lista e tente novamente.');
+                return;
+            }
+
+            notificarErroPadrao(resultado);
         }
         function formatarStatusArmario(status) {
             switch (status) {
