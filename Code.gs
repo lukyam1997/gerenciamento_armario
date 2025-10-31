@@ -179,7 +179,7 @@ function normalizarListaUnidadesParametro(valor) {
         return item !== null && item !== undefined ? item.toString().trim() : '';
       }).filter(function(item) {
         return item;
-      });
+    });
     }
 
     if (typeof valor === 'string') {
@@ -3140,14 +3140,13 @@ function getMovimentacoes(dados) {
           id: data[i][0],
           armarioId: data[i][1],
           numeroArmario: data[i][2],
-            tipo: data[i][3],
-            descricao: data[i][4],
-            responsavel: data[i][5],
-            data: data[i][6],
-            hora: data[i][7],
-            dataHoraRegistro: data[i][8]
-          });
-        }
+          tipo: data[i][3],
+          descricao: data[i][4],
+          responsavel: data[i][5],
+          data: data[i][6],
+          hora: data[i][7],
+          dataHoraRegistro: data[i][8]
+        });
       }
 
       return { success: true, data: movimentacoes };
@@ -3156,7 +3155,7 @@ function getMovimentacoes(dados) {
       registrarLog('ERRO', `Erro ao buscar movimentações: ${error.toString()}`);
       return { success: false, error: error.toString() };
     }
-  });
+    });
 }
 
 function salvarMovimentacao(dados) {
