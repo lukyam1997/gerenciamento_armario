@@ -1537,6 +1537,24 @@
             animation: spin 0.6s linear infinite;
             transform: translateY(-50%);
         }
+        .swal-button-loading {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .swal-button-spinner {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 0.6s linear infinite;
+        }
+        .swal-button-text {
+            font-weight: 600;
+        }
         @keyframes spin {
             from { transform: translateY(-50%) rotate(0deg); }
             to { transform: translateY(-50%) rotate(360deg); }
@@ -1626,6 +1644,94 @@
             border-right-color: transparent;
             border-bottom-color: transparent;
             animation: spin 0.75s linear infinite;
+        }
+        .liberacao-progress {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            text-align: left;
+        }
+        .liberacao-step {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.04);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+        }
+        .liberacao-step.is-active {
+            border-color: color-mix(in srgb, var(--primary-color) 65%, white 35%);
+            background: color-mix(in srgb, var(--primary-color) 12%, white 88%);
+            transform: translateX(4px);
+        }
+        .liberacao-step.is-complete {
+            border-color: color-mix(in srgb, var(--success-color) 68%, white 32%);
+            background: color-mix(in srgb, var(--success-color) 18%, white 82%);
+        }
+        .liberacao-step.is-error {
+            border-color: color-mix(in srgb, var(--danger-color) 70%, white 30%);
+            background: color-mix(in srgb, var(--danger-color) 16%, white 84%);
+        }
+        .liberacao-step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: color-mix(in srgb, var(--primary-color) 16%, white 84%);
+            color: color-mix(in srgb, var(--primary-color) 75%, black 25%);
+            position: relative;
+        }
+        .liberacao-step.is-active .liberacao-step-icon {
+            background: color-mix(in srgb, var(--primary-color) 22%, white 78%);
+            color: color-mix(in srgb, var(--primary-dark) 76%, white 24%);
+        }
+        .liberacao-step.is-complete .liberacao-step-icon {
+            background: color-mix(in srgb, var(--success-color) 72%, white 28%);
+            color: white;
+        }
+        .liberacao-step.is-error .liberacao-step-icon {
+            background: color-mix(in srgb, var(--danger-dark) 82%, white 18%);
+            color: white;
+        }
+        .liberacao-step-spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-bottom-color: transparent;
+            animation: spin 0.6s linear infinite;
+            display: none;
+        }
+        .liberacao-step.is-active .liberacao-step-spinner {
+            display: block;
+        }
+        .liberacao-step-icon i {
+            display: none;
+            font-size: 16px;
+        }
+        .liberacao-step.is-complete .liberacao-step-spinner,
+        .liberacao-step.is-error .liberacao-step-spinner {
+            display: none;
+        }
+        .liberacao-step.is-complete .liberacao-step-icon .fa-check,
+        .liberacao-step.is-error .liberacao-step-icon .fa-circle-exclamation {
+            display: inline;
+        }
+        .liberacao-step-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: color-mix(in srgb, var(--dark-color) 88%, black 12%);
+        }
+        .liberacao-step-subtitle {
+            font-size: 0.8rem;
+            color: color-mix(in srgb, var(--muted-color) 85%, black 15%);
+            margin-top: 2px;
         }
         .btn-primary:hover {
             background-color: color-mix(in srgb, var(--primary-color) 85%, var(--primary-dark) 15%);
@@ -3887,6 +3993,42 @@
                 }
             };
         }
+        async function atualizarDadosPosOperacao(mensagemCarregamento = 'Atualizando informações...', posAtualizacaoLocal) {
+            const finalizarOverlay = mostrarOverlayCarregamento(mensagemCarregamento);
+            try {
+                const [resultadoArmarios, resultadoEstatisticas] = await Promise.allSettled([
+                    carregarArmarios({ forcarAtualizacao: true }),
+                    carregarEstatisticas()
+                ]);
+
+                if (resultadoArmarios.status === 'rejected') {
+                    console.error('Erro ao recarregar armários após operação:', resultadoArmarios.reason);
+                } else if (resultadoArmarios.status === 'fulfilled' && resultadoArmarios.value === false) {
+                    console.warn('Recarregamento de armários não pôde ser concluído após a operação.');
+                }
+
+                if (resultadoEstatisticas.status === 'rejected') {
+                    console.error('Erro ao atualizar estatísticas após operação:', resultadoEstatisticas.reason);
+                }
+
+                if (typeof posAtualizacaoLocal === 'function') {
+                    try {
+                        posAtualizacaoLocal({ resultadoArmarios, resultadoEstatisticas });
+                    } catch (erroAtualizacaoLocal) {
+                        console.error('Erro ao aplicar atualização local pós-operação:', erroAtualizacaoLocal);
+                    }
+                }
+
+                atualizarInterface();
+                try {
+                    await carregarDadosTabelas();
+                } catch (erroCarregarTabelas) {
+                    console.error('Erro ao recarregar dados das tabelas após operação:', erroCarregarTabelas);
+                }
+            } finally {
+                finalizarOverlay();
+            }
+        }
         function configurarBotaoAcao(botao, acao) {
             if (!botao) return;
             botao.addEventListener('click', async (event) => {
@@ -5131,6 +5273,17 @@
                     confirmButtonColor: '#28a745',
                     reverseButtons: true,
                     didOpen: () => {
+                        const confirmButton = Swal.getConfirmButton();
+                        if (confirmButton) {
+                            const aplicarLoadingConfirmacao = () => {
+                                confirmButton.classList.add('swal-button-loading');
+                                confirmButton.innerHTML = `
+                                    <span class="swal-button-spinner" aria-hidden="true"></span>
+                                    <span class="swal-button-text">Preparando liberação...</span>
+                                `;
+                            };
+                            confirmButton.addEventListener('click', aplicarLoadingConfirmacao, { once: true });
+                        }
                         if (armario.tipo === 'acompanhante' && (termoPendente || termoEmAndamento)) {
                             const btn = Swal.getHtmlContainer().querySelector('#btn-aplicar-termo');
                             if (btn) {
@@ -5880,12 +6033,7 @@
             const resultado = await callGoogleScript('salvarTermoCompleto', dadosTermo);
             if (resultado.success) {
                 fecharTermoModal();
-
-                // Recarregar dados
-                await carregarArmarios({ forcarAtualizacao: true });
-                await carregarEstatisticas();
-                atualizarInterface();
-                carregarDadosTabelas();
+                await atualizarDadosPosOperacao('Atualizando informações do armário...');
                 mostrarSucesso('Etapa inicial do termo registrada. Finalize o termo ao encerrar o armário.');
             } else {
                 notificarErroPadrao(resultado);
@@ -6133,6 +6281,7 @@
                 return;
             }
 
+            const finalizarPreparacao = mostrarOverlayCarregamento('Preparando liberação do armário...');
             let termoDados = null;
             try {
                 const respostaTermo = await callGoogleScript('getTermo', { armarioId: id });
@@ -6146,6 +6295,8 @@
                 console.error('Erro ao buscar termo para liberação:', erroBuscaTermo);
                 mostrarErro('Não foi possível carregar as informações do termo. Tente novamente.');
                 return;
+            } finally {
+                finalizarPreparacao();
             }
 
             if (termoDados) {
@@ -6234,15 +6385,71 @@
                 ? (usuarioAtual.nome || usuarioAtual.email || '').toString().trim()
                 : '';
 
+            const progressoHtml = `
+                <div class="liberacao-progress" aria-label="Progresso da liberação do armário">
+                    <div class="liberacao-step is-active" data-step="termo">
+                        <div class="liberacao-step-icon" aria-hidden="true">
+                            <span class="liberacao-step-spinner"></span>
+                            <i class="fas fa-check"></i>
+                            <i class="fas fa-circle-exclamation"></i>
+                        </div>
+                        <div>
+                            <div class="liberacao-step-title">Finalizando termo</div>
+                            <div class="liberacao-step-subtitle">Registrando o encerramento com segurança.</div>
+                        </div>
+                    </div>
+                    <div class="liberacao-step" data-step="armario">
+                        <div class="liberacao-step-icon" aria-hidden="true">
+                            <span class="liberacao-step-spinner"></span>
+                            <i class="fas fa-check"></i>
+                            <i class="fas fa-circle-exclamation"></i>
+                        </div>
+                        <div>
+                            <div class="liberacao-step-title">Liberando armário</div>
+                            <div class="liberacao-step-subtitle">Atualizando a disponibilidade para o próximo uso.</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const atualizarEtapa = (etapa, estado) => {
+                const container = Swal.getHtmlContainer();
+                if (!container) return;
+                const elemento = container.querySelector(`[data-step="${etapa}"]`);
+                if (!elemento) return;
+                elemento.classList.remove('is-active', 'is-complete', 'is-error');
+                switch (estado) {
+                    case 'ativa':
+                        elemento.classList.add('is-active');
+                        break;
+                    case 'concluida':
+                        elemento.classList.add('is-complete');
+                        break;
+                    case 'erro':
+                        elemento.classList.add('is-error');
+                        break;
+                    default:
+                        break;
+                }
+            };
+            const aguardarTransicao = (tempo = 320) => new Promise(resolve => setTimeout(resolve, tempo));
+
             Swal.fire({
-                title: 'Processando liberação...',
+                title: 'Concluindo a liberação do armário...',
+                html: progressoHtml,
                 allowOutsideClick: false,
                 allowEscapeKey: false,
                 showConfirmButton: false,
                 didOpen: () => {
-                    Swal.showLoading();
+                    const container = Swal.getHtmlContainer();
+                    if (container) {
+                        container.setAttribute('aria-live', 'assertive');
+                    }
+                    atualizarEtapa('termo', 'ativa');
                 }
             });
+
+            let etapaAtual = 'termo';
 
             try {
                 const resultadoFinalizacao = await callGoogleScript('finalizarTermo', {
@@ -6261,6 +6468,8 @@
                         || erroSemAcento.includes('termo nao localizado');
 
                     if (!termoNaoEncontrado) {
+                        atualizarEtapa('termo', 'erro');
+                        await aguardarTransicao();
                         Swal.close();
                         notificarErroPadrao(resultadoFinalizacao, 'Não foi possível finalizar o termo.');
                         return;
@@ -6269,27 +6478,37 @@
                     mensagemSucesso = 'Armário liberado com sucesso. Termo não localizado para finalização.';
                 }
 
+                atualizarEtapa('termo', 'concluida');
+                etapaAtual = 'armario';
+                atualizarEtapa('armario', 'ativa');
+
                 const resultadoLiberacao = await callGoogleScript('liberarArmario', {
                     id,
                     tipo: 'acompanhante'
                 });
 
+                if (!resultadoLiberacao.success) {
+                    atualizarEtapa('armario', 'erro');
+                    await aguardarTransicao();
+                    Swal.close();
+                    notificarErroPadrao(resultadoLiberacao);
+                    return;
+                }
+
+                atualizarEtapa('armario', 'concluida');
+                await aguardarTransicao();
                 Swal.close();
 
-                if (resultadoLiberacao.success) {
-                    await carregarArmarios({ forcarAtualizacao: true });
-                    await carregarEstatisticas();
+                await atualizarDadosPosOperacao('Atualizando status do armário...', () => {
                     garantirArmarioLiberadoLocal(id, metodo, confirmacao);
                     atualizarResumoDashboardLocal();
-                    atualizarInterface();
-                    carregarDadosTabelas();
-                    mostrarSucesso(mensagemSucesso);
-                } else {
-                    notificarErroPadrao(resultadoLiberacao);
-                }
+                });
+                mostrarSucesso(mensagemSucesso);
             } catch (erro) {
-                Swal.close();
                 console.error('Erro ao liberar armário de acompanhante:', erro);
+                atualizarEtapa(etapaAtual, 'erro');
+                await aguardarTransicao();
+                Swal.close();
                 mostrarErro('Não foi possível concluir a liberação. Tente novamente.');
             }
         }
