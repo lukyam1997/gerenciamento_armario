@@ -641,6 +641,16 @@ function formatarDataPlanilha(valor) {
     if (!texto) {
       return '';
     }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+      var partesData = texto.split('-');
+      var ano = parseInt(partesData[0], 10);
+      var mes = parseInt(partesData[1], 10) - 1;
+      var dia = parseInt(partesData[2], 10);
+      if (!isNaN(ano) && !isNaN(mes) && !isNaN(dia)) {
+        var dataLocal = new Date(ano, mes, dia);
+        return Utilities.formatDate(dataLocal, timezone, 'dd/MM/yyyy');
+      }
+    }
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
       return texto;
     }
@@ -669,6 +679,10 @@ function formatarHorarioPlanilha(valor) {
     }
     if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(texto)) {
       return texto.slice(0, 5);
+    }
+    var isoSemFuso = texto.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
+    if (isoSemFuso) {
+      return isoSemFuso[2];
     }
     var textoISO = texto.replace(' ', 'T');
     var data = new Date(textoISO);

@@ -1362,6 +1362,19 @@
             color: #5b6b86;
             margin-top: 6px;
         }
+        .final-signature-dialog {
+            text-align: left;
+        }
+        .final-signature-dialog p {
+            margin-bottom: 12px;
+            color: #4b5563;
+        }
+        .final-signature-dialog strong {
+            color: #0b1324;
+        }
+        .final-signature-dialog .wizard-field {
+            margin-top: 12px;
+        }
         .wizard-volume-item {
             border: 1px dashed color-mix(in srgb, var(--primary-color) 35%, transparent);
             border-radius: 12px;
@@ -6364,6 +6377,165 @@
             prepararVolumesTermo();
             limparAssinaturaTermo(true);
         }
+        function criarControladorAssinaturaFinalizacao(canvas, field) {
+            if (!canvas) return null;
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const largura = Math.max(rect.width || 0, 320);
+            const altura = Math.max(rect.height || 0, 160);
+            canvas.width = largura;
+            canvas.height = altura;
+            canvas.style.width = `${largura}px`;
+            canvas.style.height = `${altura}px`;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#0b1324';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let desenhando = false;
+            let assinou = false;
+
+            const obterPosicao = (evento) => {
+                const bounds = canvas.getBoundingClientRect();
+                return {
+                    x: evento.clientX - bounds.left,
+                    y: evento.clientY - bounds.top
+                };
+            };
+
+            const iniciar = (evento) => {
+                evento.preventDefault();
+                desenhando = true;
+                const posicao = obterPosicao(evento);
+                ctx.beginPath();
+                ctx.moveTo(posicao.x, posicao.y);
+                canvas.setPointerCapture?.(evento.pointerId);
+                field?.classList.remove('invalid');
+            };
+
+            const desenhar = (evento) => {
+                if (!desenhando) return;
+                evento.preventDefault();
+                const posicao = obterPosicao(evento);
+                ctx.lineTo(posicao.x, posicao.y);
+                ctx.stroke();
+                assinou = true;
+                field?.classList.remove('invalid');
+            };
+
+            const finalizar = (evento) => {
+                if (!desenhando) return;
+                evento.preventDefault();
+                desenhando = false;
+                canvas.releasePointerCapture?.(evento.pointerId);
+            };
+
+            const limpar = (mostrarErro = true) => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                assinou = false;
+                if (mostrarErro) {
+                    field?.classList.add('invalid');
+                }
+            };
+
+            const removerEventos = () => {
+                canvas.removeEventListener('pointerdown', iniciar);
+                canvas.removeEventListener('pointermove', desenhar);
+                canvas.removeEventListener('pointerup', finalizar);
+                canvas.removeEventListener('pointerleave', finalizar);
+                canvas.removeEventListener('pointercancel', finalizar);
+            };
+
+            canvas.addEventListener('pointerdown', iniciar);
+            canvas.addEventListener('pointermove', desenhar);
+            canvas.addEventListener('pointerup', finalizar);
+            canvas.addEventListener('pointerleave', finalizar);
+            canvas.addEventListener('pointercancel', finalizar);
+            field?.classList.add('invalid');
+
+            return {
+                limpar,
+                possuiAssinatura: () => assinou,
+                obterImagem: () => canvas.toDataURL('image/png'),
+                destruir: removerEventos
+            };
+        }
+        async function coletarAssinaturaEncerramento(nomeAcompanhante) {
+            const nomeTratado = (nomeAcompanhante || '').toString().trim();
+            const textoAssinante = nomeTratado ? `<strong>${nomeTratado}</strong>` : 'o acompanhante';
+            let controlador = null;
+            let botaoLimpar = null;
+            let limparHandler = null;
+
+            const resultado = await Swal.fire({
+                title: 'Assinatura de encerramento',
+                html: `
+                    <div class="final-signature-dialog">
+                        <p>Solicite que ${textoAssinante} assine abaixo para concluir o encerramento.</p>
+                        <div class="wizard-field" id="final-signature-field">
+                            <label class="wizard-required" for="final-signature-canvas">Assinatura do acompanhante</label>
+                            <div class="wizard-signature-area">
+                                <canvas id="final-signature-canvas" class="wizard-signature-canvas" aria-label="Área para assinatura de encerramento"></canvas>
+                                <div class="wizard-signature-actions">
+                                    <button type="button" class="btn btn-secondary" id="final-signature-clear">Limpar assinatura</button>
+                                </div>
+                                <div class="wizard-signature-hint">A assinatura será anexada ao termo de responsabilidade.</div>
+                            </div>
+                            <div class="wizard-error">Colha a assinatura para finalizar o armário.</div>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Finalizar encerramento',
+                cancelButtonText: 'Cancelar',
+                didOpen: () => {
+                    const canvas = document.getElementById('final-signature-canvas');
+                    const field = document.getElementById('final-signature-field');
+                    botaoLimpar = document.getElementById('final-signature-clear');
+                    const inicializar = () => {
+                        if (!canvas) {
+                            return;
+                        }
+                        controlador = criarControladorAssinaturaFinalizacao(canvas, field);
+                        if (botaoLimpar) {
+                            limparHandler = (evento) => {
+                                evento.preventDefault();
+                                controlador?.limpar();
+                            };
+                            botaoLimpar.addEventListener('click', limparHandler);
+                        }
+                    };
+                    if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(inicializar);
+                    } else {
+                        setTimeout(inicializar, 0);
+                    }
+                },
+                willClose: () => {
+                    if (botaoLimpar && limparHandler) {
+                        botaoLimpar.removeEventListener('click', limparHandler);
+                    }
+                    if (controlador) {
+                        controlador.destruir();
+                        controlador = null;
+                    }
+                },
+                preConfirm: () => {
+                    const field = document.getElementById('final-signature-field');
+                    if (!controlador || !controlador.possuiAssinatura()) {
+                        field?.classList.add('invalid');
+                        Swal.showValidationMessage('Colha a assinatura para finalizar o armário.');
+                        return false;
+                    }
+                    const imagem = controlador.obterImagem();
+                    return imagem.replace('data:image/png;base64,', '');
+                }
+            });
+
+            return resultado.isConfirmed ? resultado.value : null;
+        }
         async function abrirMovimentacoes(id) {
             const armario = obterArmarioPorId(id);
             if (!armario) return;
@@ -6727,7 +6899,18 @@
                 return;
             }
 
-            const metodo = 'manual';
+            const assinaturaFinalBase64 = await coletarAssinaturaEncerramento(acompanhante);
+            if (!assinaturaFinalBase64) {
+                await Swal.fire({
+                    title: 'Liberação cancelada',
+                    text: 'A assinatura de encerramento não foi coletada. O armário permanecerá ativo.',
+                    icon: 'info',
+                    confirmButtonText: 'Entendi'
+                });
+                return;
+            }
+
+            const metodo = 'assinatura';
             const confirmacao = '';
             let mensagemSucesso = 'Termo finalizado e armário liberado com sucesso';
             const usuarioResponsavel = obterDescricaoResponsavelAtual();
@@ -6803,7 +6986,7 @@
                     armarioId: identificadores?.idPlanilha || '',
                     numeroArmario: identificadores?.numeroArmario || '',
                     metodo,
-                    assinaturaFinal: '',
+                    assinaturaFinal: assinaturaFinalBase64,
                     confirmacao,
                     usuarioResponsavel,
                     tipo: identificadores?.tipo || ''
