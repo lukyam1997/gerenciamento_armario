@@ -1355,8 +1355,8 @@
             padding: 16px;
         }
         .final-signature-dialog .wizard-signature-canvas {
-            min-height: 220px;
-            height: 220px;
+            min-height: 240px;
+            height: 240px;
         }
         .wizard-signature-actions {
             display: flex;
@@ -1381,6 +1381,13 @@
         }
         .final-signature-dialog .wizard-field {
             margin-top: 12px;
+        }
+        .swal2-popup.swal2-final-signature {
+            width: min(90vw, 720px) !important;
+            max-width: none !important;
+        }
+        .swal2-popup.swal2-final-signature .final-signature-dialog {
+            width: 100%;
         }
         .wizard-volume-item {
             border: 1px dashed color-mix(in srgb, var(--primary-color) 35%, transparent);
@@ -1685,6 +1692,7 @@
             flex-direction: column;
             gap: 12px;
             text-align: left;
+            width: 100%;
         }
         .liberacao-step {
             display: flex;
@@ -1694,12 +1702,12 @@
             border-radius: 14px;
             background: rgba(15, 23, 42, 0.04);
             border: 1px solid rgba(15, 23, 42, 0.08);
-            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            width: 100%;
         }
         .liberacao-step.is-active {
             border-color: color-mix(in srgb, var(--primary-color) 65%, white 35%);
             background: color-mix(in srgb, var(--primary-color) 12%, white 88%);
-            transform: translateX(4px);
         }
         .liberacao-step.is-complete {
             border-color: color-mix(in srgb, var(--success-color) 68%, white 32%);
@@ -6392,8 +6400,11 @@
             if (!canvas) return null;
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
-            const largura = Math.max(rect.width || 0, 320);
-            const altura = Math.max(rect.height || 0, 220);
+            const areaAssinatura = canvas.parentElement;
+            const areaRect = areaAssinatura ? areaAssinatura.getBoundingClientRect() : rect;
+            const larguraDisponivel = Math.max(areaRect.width || 0, rect.width || 0);
+            const largura = Math.max(larguraDisponivel, 420);
+            const altura = Math.max(areaRect.height || rect.height || 0, 240);
             canvas.width = largura;
             canvas.height = altura;
             canvas.style.width = `${largura}px`;
@@ -6499,6 +6510,10 @@
                 `,
                 focusConfirm: false,
                 showCancelButton: true,
+                width: '720px',
+                customClass: {
+                    popup: 'swal2-final-signature'
+                },
                 confirmButtonText: 'Finalizar encerramento',
                 cancelButtonText: 'Cancelar',
                 didOpen: () => {
@@ -6973,7 +6988,7 @@
                         break;
                 }
             };
-            const aguardarTransicao = (tempo = 60) => new Promise(resolve => setTimeout(resolve, tempo));
+            const aguardarTransicao = (tempo = 25) => new Promise(resolve => setTimeout(resolve, tempo));
 
             Swal.fire({
                 title: 'Concluindo a liberação do armário...',
