@@ -1490,6 +1490,20 @@
             box-shadow: 0 0 0 4px var(--focus-ring);
             outline: none;
         }
+        .form-static {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: color-mix(in srgb, var(--light-color) 70%, white 30%);
+            font-size: 0.95rem;
+            color: var(--muted-color);
+        }
+        .form-static.is-warning {
+            background-color: color-mix(in srgb, var(--warning-color) 18%, white 82%);
+            border-color: color-mix(in srgb, var(--warning-color) 42%, var(--border-color) 58%);
+            color: color-mix(in srgb, var(--warning-color) 65%, black 35%);
+        }
         .form-actions {
             display: flex;
             justify-content: flex-end;
@@ -2454,7 +2468,9 @@
                                 <div class="wizard-col-4">
                                     <div class="wizard-field">
                                         <label for="termo-setor" class="wizard-required">Setor de internação</label>
-                                        <input type="text" id="termo-setor" class="wizard-input" required>
+                                        <select id="termo-setor" class="wizard-input" required>
+                                            <option value="">Selecione o setor</option>
+                                        </select>
                                         <div class="wizard-error">Informe o setor.</div>
                                     </div>
                                 </div>
@@ -2617,8 +2633,8 @@
                         <textarea id="mov-descricao" class="form-control" rows="3" required placeholder="Descreva brevemente o que ocorreu"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="mov-responsavel">Responsável pelo registro</label>
-                        <input type="text" id="mov-responsavel" class="form-control" placeholder="Nome do colaborador" required>
+                        <label>Responsável pelo registro</label>
+                        <div class="form-static" id="mov-responsavel-info">Será preenchido automaticamente com seu usuário.</div>
                     </div>
                     <div class="form-group" style="display:flex; gap:12px;">
                         <div style="flex:1;">
@@ -2712,6 +2728,7 @@
                 armariosCarregados: false,
                 cadastroArmarios: [],
                 unidades: [],
+                setores: [],
                 notificacoes: [],
                 termos: {},
                 movimentacoes: {},
@@ -3024,6 +3041,7 @@
             globalLoadingText: document.getElementById('global-loading-text'),
             termoModal: document.getElementById('termo-modal'),
             termoForm: document.getElementById('termo-form'),
+            termoSetor: document.getElementById('termo-setor'),
             termoModalClose: document.getElementById('termo-modal-close'),
             termoBtnVoltar: document.getElementById('termo-btn-voltar'),
             termoBtnAvancar: document.getElementById('termo-btn-avancar'),
@@ -3045,7 +3063,7 @@
             movimentacaoModalTitle: document.getElementById('movimentacao-modal-title'),
             movTipo: document.getElementById('mov-tipo'),
             movDescricao: document.getElementById('mov-descricao'),
-            movResponsavel: document.getElementById('mov-responsavel'),
+            movResponsavelInfo: document.getElementById('mov-responsavel-info'),
             movData: document.getElementById('mov-data'),
             movHora: document.getElementById('mov-hora'),
             btnNovaUnidade: document.getElementById('btn-nova-unidade'),
@@ -3367,6 +3385,38 @@
         function obterUsuarioAutenticado() {
             return estado.usuarioAutenticado || null;
         }
+        function obterDescricaoResponsavelAtual() {
+            const usuario = obterUsuarioAutenticado();
+            if (!usuario) {
+                return '';
+            }
+            const nome = (usuario.nome || '').toString().trim();
+            const matricula = (usuario.matricula || '').toString().trim();
+            const login = (usuario.usuario || '').toString().trim();
+            const partes = [];
+            if (nome) {
+                partes.push(nome);
+            }
+            if (matricula) {
+                partes.push(matricula);
+            } else if (login && !partes.includes(login)) {
+                partes.push(login);
+            }
+            return partes.join(' - ') || nome || matricula || login;
+        }
+        function atualizarResponsavelMovimentacaoInfo() {
+            if (!elementos.movResponsavelInfo) {
+                return;
+            }
+            const descricao = obterDescricaoResponsavelAtual();
+            if (descricao) {
+                elementos.movResponsavelInfo.textContent = descricao;
+                elementos.movResponsavelInfo.classList.remove('is-warning');
+            } else {
+                elementos.movResponsavelInfo.textContent = 'Faça login para registrar movimentações.';
+                elementos.movResponsavelInfo.classList.add('is-warning');
+            }
+        }
         function perfilAtualEhAdmin() {
             const usuario = obterUsuarioAutenticado();
             return usuario ? normalizarTexto(usuario.perfil) === 'admin' : false;
@@ -3475,6 +3525,80 @@
             const unica = partes[0];
             return unica.slice(0, Math.min(2, unica.length)).toUpperCase();
         }
+        function normalizarListaSetores(setores) {
+            const lista = Array.isArray(setores) ? setores : [];
+            const vistos = new Set();
+            const resultado = [];
+            lista.forEach(item => {
+                const texto = (item ?? '').toString().trim();
+                if (!texto) {
+                    return;
+                }
+                const chave = normalizarTexto(texto);
+                if (vistos.has(chave)) {
+                    return;
+                }
+                vistos.add(chave);
+                resultado.push(texto);
+            });
+            return resultado.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+        }
+        function atualizarOpcoesSetorTermo(lista = estado.setores) {
+            const select = elementos.termoSetor;
+            if (!select) {
+                return;
+            }
+            const valorAtual = select.value;
+            const setoresValidos = normalizarListaSetores(lista);
+            select.innerHTML = '';
+            const opcaoPadrao = document.createElement('option');
+            opcaoPadrao.value = '';
+            opcaoPadrao.textContent = 'Selecione o setor';
+            select.appendChild(opcaoPadrao);
+            setoresValidos.forEach(setor => {
+                const option = document.createElement('option');
+                option.value = setor;
+                option.textContent = setor;
+                select.appendChild(option);
+            });
+            if (valorAtual) {
+                garantirOpcaoSetor(valorAtual);
+                select.value = valorAtual;
+            } else {
+                select.value = '';
+            }
+        }
+        function garantirOpcaoSetor(setor) {
+            const select = elementos.termoSetor;
+            if (!select) {
+                return;
+            }
+            const texto = (setor ?? '').toString().trim();
+            if (!texto) {
+                return;
+            }
+            const chaveTexto = normalizarTexto(texto);
+            const existe = Array.from(select.options).some(opt => normalizarTexto(opt.value) === chaveTexto);
+            if (!existe) {
+                const option = document.createElement('option');
+                option.value = texto;
+                option.textContent = texto;
+                select.appendChild(option);
+            }
+        }
+        function definirSetorTermo(valor) {
+            const select = elementos.termoSetor;
+            if (!select) {
+                return;
+            }
+            const texto = (valor ?? '').toString().trim();
+            if (!texto) {
+                select.value = '';
+                return;
+            }
+            garantirOpcaoSetor(texto);
+            select.value = texto;
+        }
         function obterDescricaoUnidades(unidadesLista) {
             const lista = normalizarListaDeUnidades(unidadesLista);
             if (!lista.length) {
@@ -3500,6 +3624,7 @@
                 elementos.headerUserAvatar.textContent = '--';
                 elementos.headerUserAvatar.style.backgroundImage = '';
                 elementos.headerUserAvatar.classList.remove('has-image');
+                atualizarResponsavelMovimentacaoInfo();
                 return;
             }
             const nomeLimpo = (usuario.nome || 'Usuário').toString().trim();
@@ -3516,6 +3641,7 @@
                 elementos.headerUserAvatar.textContent = gerarIniciais(nomeLimpo);
             }
             sincronizarSelecaoAvatar();
+            atualizarResponsavelMovimentacaoInfo();
         }
         function aplicarPermissoesMenu() {
             if (!elementos.menuLinks) return;
@@ -3548,6 +3674,8 @@
         let termoDesenhandoAssinatura = false;
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
+            atualizarOpcoesSetorTermo();
+            atualizarResponsavelMovimentacaoInfo();
             inicializarLogin();
         });
         function aguardar(ms) {
@@ -3757,6 +3885,7 @@
             limparSessaoUsuario();
             atualizarFeedbackLogin();
             atualizarCabecalhoUsuario();
+            atualizarOpcoesSetorTermo();
             if (elementos.loginUsuario) {
                 elementos.loginUsuario.value = '';
             }
@@ -3828,6 +3957,7 @@
                 }
 
                 const carregamentoUnidades = await executarCarregamentoSeguro('carregar unidades', carregarUnidades);
+                const carregamentoSetores = await executarCarregamentoSeguro('carregar setores', carregarSetores);
                 const demaisCarregamentos = await Promise.all([
                     executarCarregamentoSeguro('carregar armários', () => carregarArmarios({ forcarAtualizacao: true })),
                     executarCarregamentoSeguro('carregar usuários', carregarUsuarios),
@@ -3835,7 +3965,7 @@
                     executarCarregamentoSeguro('carregar notificações', carregarNotificacoes)
                 ]);
 
-                const resultados = [carregamentoUnidades, ...demaisCarregamentos];
+                const resultados = [carregamentoUnidades, carregamentoSetores, ...demaisCarregamentos];
                 const houveSucesso = resultados.some(item => item.sucesso);
 
                 if (!houveSucesso) {
@@ -3899,6 +4029,21 @@
                 if (estado.unidadeAtual !== 'todas' && !usuarioPodeVerUnidade(estado.unidadeAtual)) {
                     estado.unidadeAtual = 'todas';
                 }
+                return true;
+            }
+            return false;
+        }
+        async function carregarSetores() {
+            if (!estado.autenticado) {
+                estado.setores = [];
+                atualizarOpcoesSetorTermo();
+                return true;
+            }
+            const resultado = await callGoogleScript('getSetores');
+            if (resultado.success) {
+                const setores = normalizarListaSetores(resultado.data);
+                estado.setores = setores;
+                atualizarOpcoesSetorTermo(setores);
                 return true;
             }
             return false;
@@ -5841,7 +5986,7 @@
             document.getElementById('termo-paciente').value = termoDados?.paciente || preCadastro?.nomePaciente || armario.nomePaciente || '';
             document.getElementById('termo-prontuario').value = termoDados?.prontuario || '';
             document.getElementById('termo-nascimento').value = termoDados?.nascimento ? termoDados.nascimento.slice(0, 10) : '';
-            document.getElementById('termo-setor').value = termoDados?.setor || '';
+            definirSetorTermo(termoDados?.setor || preCadastro?.setor || '');
             document.getElementById('termo-leito').value = termoDados?.leito || preCadastro?.leito || armario.leito || '';
             document.getElementById('termo-resp-nome').value = termoDados?.acompanhante || preCadastro?.nomeVisitante || armario.nomeVisitante || '';
             document.getElementById('termo-resp-telefone').value = termoDados?.telefone || '';
@@ -6147,7 +6292,7 @@
                 paciente: document.getElementById('termo-paciente').value.trim(),
                 prontuario: document.getElementById('termo-prontuario').value.trim(),
                 nascimento: document.getElementById('termo-nascimento').value,
-                setor: document.getElementById('termo-setor').value.trim(),
+                setor: (elementos.termoSetor?.value || '').toString().trim(),
                 leito: document.getElementById('termo-leito').value.trim(),
                 consciente: document.querySelector('input[name="termo-consciente"]:checked')?.value || '',
                 acompanhante: document.getElementById('termo-resp-nome').value.trim(),
@@ -6195,6 +6340,7 @@
             movimentacaoArmarioAtual = id;
             elementos.movimentacaoModalTitle.textContent = `Movimentações - Armário ${armario.numero}`;
             elementos.movimentacaoForm.reset();
+            atualizarResponsavelMovimentacaoInfo();
             const agora = new Date();
             const iso = agora.toISOString();
             elementos.movData.value = iso.slice(0, 10);
@@ -6259,6 +6405,7 @@
             lista.forEach(item => {
                 const bloco = document.createElement('div');
                 bloco.className = 'movimentacao-item';
+                const responsavelTexto = item.responsavel ? item.responsavel : 'Não informado';
                 bloco.innerHTML = `
                     <div class="movimentacao-header">
                         <span>${formatarTituloMovimento(item.tipo)}</span>
@@ -6266,7 +6413,7 @@
                     </div>
                     <div class="movimentacao-meta">
                         <span><strong>Descrição:</strong> ${item.descricao}</span>
-                        <span><strong>Responsável:</strong> ${item.responsavel}</span>
+                        <span><strong>Responsável:</strong> ${responsavelTexto}</span>
                     </div>
                 `;
                 elementos.movimentacoesList.appendChild(bloco);
@@ -6280,14 +6427,20 @@
                 mostrarErro('Armário não encontrado para registrar movimentação.');
                 return;
             }
+            const responsavelRegistro = obterDescricaoResponsavelAtual();
+            if (!responsavelRegistro) {
+                mostrarErro('Não foi possível identificar o usuário responsável. Faça login novamente para registrar movimentações.');
+                return;
+            }
             const identificadores = montarIdentificadoresArmario(armario);
             const tipoSelecionado = normalizarTexto(elementos.movTipo.value);
             const dados = {
                 armarioId: identificadores?.idPlanilha || '',
                 numeroArmario: identificadores?.numeroArmario || '',
                 tipo: tipoSelecionado || identificadores?.tipo || '',
+                tipoArmario: identificadores?.tipo || '',
                 descricao: elementos.movDescricao.value.trim(),
-                responsavel: elementos.movResponsavel.value.trim(),
+                responsavel: responsavelRegistro,
                 data: elementos.movData.value,
                 hora: elementos.movHora.value
             };
@@ -6543,10 +6696,7 @@
             const metodo = 'manual';
             const confirmacao = '';
             let mensagemSucesso = 'Termo finalizado e armário liberado com sucesso';
-            const usuarioAtual = obterUsuarioAutenticado();
-            const usuarioResponsavel = usuarioAtual
-                ? (usuarioAtual.nome || usuarioAtual.email || '').toString().trim()
-                : '';
+            const usuarioResponsavel = obterDescricaoResponsavelAtual();
 
             const progressoHtml = `
                 <div class="liberacao-progress" aria-label="Progresso da liberação do armário">
@@ -6621,7 +6771,8 @@
                     metodo,
                     assinaturaFinal: '',
                     confirmacao,
-                    usuarioResponsavel
+                    usuarioResponsavel,
+                    tipo: identificadores?.tipo || ''
                 });
 
                 if (!resultadoFinalizacao.success) {
