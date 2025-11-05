@@ -2145,6 +2145,7 @@
                                     <th>Hora Fim</th>
                                     <th>WhatsApp</th>
                                     <th>Status</th>
+                                    <th>Usuário</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2174,6 +2175,7 @@
                                     <th>Hora Fim</th>
                                     <th>WhatsApp</th>
                                     <th>Status</th>
+                                    <th>Usuário</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3372,6 +3374,7 @@
                 armarioId: identificadores.idPlanilha,
                 numeroArmario: identificadores.numeroArmario,
                 tipo: identificadores.tipo,
+                usuarioResponsavel: obterDescricaoResponsavelAtual(),
                 ...extras
             };
         }
@@ -3384,6 +3387,16 @@
         }
         function obterUsuarioAutenticado() {
             return estado.usuarioAutenticado || null;
+        }
+        function obterDataHoraLocalPadrao() {
+            const agora = new Date();
+            const offset = agora.getTimezoneOffset();
+            const local = new Date(agora.getTime() - offset * 60000);
+            const isoLocal = local.toISOString();
+            return {
+                data: isoLocal.slice(0, 10),
+                hora: isoLocal.slice(11, 16)
+            };
         }
         function obterDescricaoResponsavelAtual() {
             const usuario = obterUsuarioAutenticado();
@@ -3670,6 +3683,7 @@
         let termoPreCadastro = null;
         let termoCadastroArmario = null;
         let movimentacaoArmarioAtual = null;
+        let movimentacaoEmProgresso = false;
         let termoAssinaturaDesenhada = false;
         let termoDesenhandoAssinatura = false;
         // Inicialização
@@ -4452,9 +4466,15 @@
             }, 150));
             // Movimentações
             elementos.movimentacaoModalClose.addEventListener('click', fecharMovimentacaoModal);
-            elementos.movimentacaoForm.addEventListener('submit', function(e) {
+            elementos.movimentacaoForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
-                salvarMovimentacao();
+                const botao = elementos.movimentacaoForm.querySelector('button[type="submit"]');
+                const finalizarLoading = iniciarLoadingBotao(botao);
+                try {
+                    await salvarMovimentacao();
+                } finally {
+                    finalizarLoading();
+                }
             });
             // Tabela de termos
             elementos.tabelaTermos.addEventListener('click', tratarAcaoTermo);
@@ -4908,7 +4928,7 @@
             tbody.innerHTML = '';
             const registros = (resultado.data || []).filter(item => usuarioPodeVerUnidade(item.unidade));
             if (!registros.length) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum registro encontrado.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum registro encontrado.</td></tr>';
                 return;
             }
             registros.forEach(historico => {
@@ -4924,6 +4944,7 @@
                     <td>${historico.horaFim}</td>
                     <td>${historico.whatsapp || '-'}</td>
                     <td>${historico.status}</td>
+                    <td>${historico.usuario || '-'}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -4936,7 +4957,7 @@
             tbody.innerHTML = '';
             const registros = (resultado.data || []).filter(item => usuarioPodeVerUnidade(item.unidade));
             if (!registros.length) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum registro encontrado.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:12px; color:#5b6b86;">Nenhum registro encontrado.</td></tr>';
                 return;
             }
             registros.forEach(historico => {
@@ -4952,6 +4973,7 @@
                     <td>${historico.horaFim}</td>
                     <td>${historico.whatsapp || '-'}</td>
                     <td>${historico.status}</td>
+                    <td>${historico.usuario || '-'}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -5730,7 +5752,8 @@
                     whatsapp: document.getElementById('whatsapp-contato').value.trim(),
                     volumes: volumesInformados,
                     horaPrevista: tipo === 'visitante' ? document.getElementById('hora-prevista').value : '',
-                    tipo: tipo
+                    tipo: tipo,
+                    usuarioResponsavel: obterDescricaoResponsavelAtual()
                 };
                 if (tipo === 'acompanhante') {
                     termoPreCadastro = {
@@ -5920,6 +5943,13 @@
         }
         function formatarData(valor) {
             if (!valor) return '-';
+            if (typeof valor === 'string') {
+                const texto = valor.trim();
+                if (!texto) return '-';
+                if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+                    return texto;
+                }
+            }
             try {
                 const data = new Date(valor);
                 if (Number.isNaN(data.getTime())) {
@@ -6341,10 +6371,9 @@
             elementos.movimentacaoModalTitle.textContent = `Movimentações - Armário ${armario.numero}`;
             elementos.movimentacaoForm.reset();
             atualizarResponsavelMovimentacaoInfo();
-            const agora = new Date();
-            const iso = agora.toISOString();
-            elementos.movData.value = iso.slice(0, 10);
-            elementos.movHora.value = iso.slice(11, 16);
+            const padraoLocal = obterDataHoraLocalPadrao();
+            elementos.movData.value = padraoLocal.data;
+            elementos.movHora.value = padraoLocal.hora;
             elementos.movimentacaoModal.style.display = 'flex';
             mostrarLoadingMovimentacoes();
             await renderizarMovimentacoes(id);
@@ -6422,40 +6451,45 @@
 
         async function salvarMovimentacao() {
             if (!movimentacaoArmarioAtual) return;
-            const armario = obterArmarioPorId(movimentacaoArmarioAtual) || estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(movimentacaoArmarioAtual));
-            if (!armario) {
-                mostrarErro('Armário não encontrado para registrar movimentação.');
-                return;
-            }
-            const responsavelRegistro = obterDescricaoResponsavelAtual();
-            if (!responsavelRegistro) {
-                mostrarErro('Não foi possível identificar o usuário responsável. Faça login novamente para registrar movimentações.');
-                return;
-            }
-            const identificadores = montarIdentificadoresArmario(armario);
-            const tipoSelecionado = normalizarTexto(elementos.movTipo.value);
-            const dados = {
-                armarioId: identificadores?.idPlanilha || '',
-                numeroArmario: identificadores?.numeroArmario || '',
-                tipo: tipoSelecionado || identificadores?.tipo || '',
-                tipoArmario: identificadores?.tipo || '',
-                descricao: elementos.movDescricao.value.trim(),
-                responsavel: responsavelRegistro,
-                data: elementos.movData.value,
-                hora: elementos.movHora.value
-            };
-            const resultado = await callGoogleScript('salvarMovimentacao', dados);
-            if (resultado.success) {
-                await renderizarMovimentacoes(movimentacaoArmarioAtual);
-                mostrarSucesso('Movimentação registrada com sucesso');
-                elementos.movimentacaoForm.reset();
-                elementos.movTipo.value = '';
-                const agora = new Date();
-                const iso = agora.toISOString();
-                elementos.movData.value = iso.slice(0, 10);
-                elementos.movHora.value = iso.slice(11, 16);
-            } else {
-                notificarErroPadrao(resultado);
+            if (movimentacaoEmProgresso) return;
+            movimentacaoEmProgresso = true;
+            try {
+                const armario = obterArmarioPorId(movimentacaoArmarioAtual) || estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === normalizarIdentificador(movimentacaoArmarioAtual));
+                if (!armario) {
+                    mostrarErro('Armário não encontrado para registrar movimentação.');
+                    return;
+                }
+                const responsavelRegistro = obterDescricaoResponsavelAtual();
+                if (!responsavelRegistro) {
+                    mostrarErro('Não foi possível identificar o usuário responsável. Faça login novamente para registrar movimentações.');
+                    return;
+                }
+                const identificadores = montarIdentificadoresArmario(armario);
+                const tipoSelecionado = normalizarTexto(elementos.movTipo.value);
+                const dados = {
+                    armarioId: identificadores?.idPlanilha || '',
+                    numeroArmario: identificadores?.numeroArmario || '',
+                    tipo: tipoSelecionado || identificadores?.tipo || '',
+                    tipoArmario: identificadores?.tipo || '',
+                    descricao: elementos.movDescricao.value.trim(),
+                    responsavel: responsavelRegistro,
+                    data: elementos.movData.value,
+                    hora: elementos.movHora.value
+                };
+                const resultado = await callGoogleScript('salvarMovimentacao', dados);
+                if (resultado.success) {
+                    await renderizarMovimentacoes(movimentacaoArmarioAtual);
+                    mostrarSucesso('Movimentação registrada com sucesso');
+                    elementos.movimentacaoForm.reset();
+                    elementos.movTipo.value = '';
+                    const padraoLocal = obterDataHoraLocalPadrao();
+                    elementos.movData.value = padraoLocal.data;
+                    elementos.movHora.value = padraoLocal.hora;
+                } else {
+                    notificarErroPadrao(resultado);
+                }
+            } finally {
+                movimentacaoEmProgresso = false;
             }
         }
         async function tratarAcaoTermo(evento) {
