@@ -578,9 +578,9 @@ function inicializarPlanilha() {
         nome: 'Termos de Responsabilidade', 
         cabecalhos: ['ID', 'ArmarioID', 'NumeroArmario', 'Paciente', 'Prontuario', 'Nascimento', 'Setor', 'Leito', 'Consciente', 'Acompanhante', 'Telefone', 'Documento', 'Parentesco', 'Orientacoes', 'Volumes', 'DescricaoVolumes', 'AplicadoEm', 'PDF_URL', 'AssinaturaBase64'] 
       },
-      { 
-        nome: 'Movimentações', 
-        cabecalhos: ['ID', 'ArmarioID', 'NumeroArmario', 'Tipo', 'Descricao', 'Responsavel', 'Data', 'Hora', 'DataHoraRegistro'] 
+      {
+        nome: 'Movimentações',
+        cabecalhos: ['ID', 'ArmarioID', 'NumeroArmario', 'Tipo', 'Descricao', 'Responsavel', 'Data', 'Hora', 'DataHoraRegistro', 'Status']
       }
     ];
     
@@ -780,7 +780,11 @@ function handlePost(e) {
       case 'getUnidades':
         return ContentService.createTextOutput(JSON.stringify(getUnidades()))
           .setMimeType(ContentService.MimeType.JSON);
-      
+
+      case 'getSetores':
+        return ContentService.createTextOutput(JSON.stringify(getSetores()))
+          .setMimeType(ContentService.MimeType.JSON);
+
       case 'cadastrarUnidade':
         return ContentService.createTextOutput(JSON.stringify(cadastrarUnidade(e.parameter)))
           .setMimeType(ContentService.MimeType.JSON);
@@ -1786,6 +1790,7 @@ function autenticarUsuario(dados) {
       nome: obterValorLinha(linhaUsuario, estrutura, 'nome', ''),
       email: obterValorLinha(linhaUsuario, estrutura, 'email', ''),
       usuario: obterValorLinha(linhaUsuario, estrutura, 'usuario', login) || login,
+      matricula: obterValorLinha(linhaUsuario, estrutura, 'matricula', ''),
       perfil: obterValorLinha(linhaUsuario, estrutura, 'perfil', ''),
       acessoVisitantes: converterParaBoolean(obterValorLinha(linhaUsuario, estrutura, 'acesso visitantes', false)),
       acessoAcompanhantes: converterParaBoolean(obterValorLinha(linhaUsuario, estrutura, 'acesso acompanhantes', false)),
@@ -2063,11 +2068,63 @@ function getUnidades() {
   });
 }
 
+function getSetores() {
+  return executarComCache(montarChaveCache('setores'), CACHE_TTL_PADRAO, function() {
+    try {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName('Cadastro');
+
+      if (!sheet) {
+        return { success: true, data: [] };
+      }
+
+      var ultimaLinha = sheet.getLastRow();
+      if (ultimaLinha < 2) {
+        return { success: true, data: [] };
+      }
+
+      var valores = sheet.getRange(2, 1, ultimaLinha - 1, 1).getValues();
+      var setoresMapeados = {};
+      var setores = [];
+
+      for (var i = 0; i < valores.length; i++) {
+        var bruto = valores[i][0];
+        if (bruto === null || bruto === undefined) {
+          continue;
+        }
+        var texto = bruto.toString().trim();
+        if (!texto) {
+          continue;
+        }
+        var chave = normalizarTextoBasico(texto);
+        if (!chave) {
+          continue;
+        }
+        if (setoresMapeados[chave]) {
+          continue;
+        }
+        setoresMapeados[chave] = true;
+        setores.push(texto);
+      }
+
+      setores.sort(function(a, b) {
+        return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+      });
+
+      return { success: true, data: setores };
+
+    } catch (error) {
+      registrarLog('ERRO', 'Erro ao buscar setores: ' + error.toString());
+      return { success: false, error: error.toString() };
+    }
+  });
+}
+
 function cadastrarUnidade(dados) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Unidades');
-    
+
     if (!sheet) {
       return { success: false, error: 'Aba de unidades não encontrada' };
     }
@@ -2684,6 +2741,7 @@ function finalizarTermo(dados) {
     var confirmacao = dados.confirmacao || '';
     var assinaturaFinal = dados.assinaturaFinal || '';
     var numeroInformado = normalizarNumeroArmario(dados.numeroArmario);
+    var tipoTermo = dados && dados.tipo ? dados.tipo.toString() : '';
 
     var termosInfo = obterTermosRegistrados();
     if (!termosInfo.sheet) {
@@ -2833,6 +2891,8 @@ function finalizarTermo(dados) {
     termosInfo.sheet.getRange(termoEncontrado.linha, 20).setValue('Finalizado');
 
     termoEncontrado.status = 'Finalizado';
+
+    finalizarMovimentacoesArmario(armarioId, numeroInformado, tipoTermo);
 
     limparCacheTermos();
     limparCacheArmarios();
@@ -3105,7 +3165,26 @@ function formatarDataParaHTML(data) {
 }
 
 // Funções para Movimentações
+function garantirEstruturaMovimentacoes(sheet) {
+  if (!sheet) {
+    return 10;
+  }
+  var colunaStatus = 10;
+  var totalColunas = sheet.getLastColumn();
+  if (totalColunas < colunaStatus) {
+    sheet.insertColumnsAfter(totalColunas, colunaStatus - totalColunas);
+  }
+  var cabecalhoStatus = sheet.getRange(1, colunaStatus).getValue();
+  if (!cabecalhoStatus) {
+    sheet.getRange(1, colunaStatus).setValue('Status');
+  }
+  return colunaStatus;
+}
+
 function getMovimentacoes(dados) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Movimentações');
+  var colunaStatus = garantirEstruturaMovimentacoes(sheet);
   var possuiArmario = dados && dados.armarioId !== undefined && dados.armarioId !== null;
   var armarioId = possuiArmario ? dados.armarioId : null;
   var armarioIdTexto = possuiArmario && armarioId !== null && armarioId !== undefined ? armarioId.toString().trim() : '';
@@ -3116,9 +3195,6 @@ function getMovimentacoes(dados) {
 
   return executarComCache(chaveCache, CACHE_TTL_MOVIMENTACOES, function() {
     try {
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
-      var sheet = ss.getSheetByName('Movimentações');
-
       if (!sheet || sheet.getLastRow() < 2) {
         return { success: true, data: [] };
       }
@@ -3143,6 +3219,12 @@ function getMovimentacoes(dados) {
           }
         }
 
+        var statusLinha = colunaStatus ? data[i][colunaStatus - 1] : '';
+        var statusNormalizado = normalizarTextoBasico(statusLinha);
+        if (statusNormalizado === 'finalizado') {
+          continue;
+        }
+
         movimentacoes.push({
           id: data[i][0],
           armarioId: data[i][1],
@@ -3152,7 +3234,8 @@ function getMovimentacoes(dados) {
           responsavel: data[i][5],
           data: data[i][6],
           hora: data[i][7],
-          dataHoraRegistro: data[i][8]
+          dataHoraRegistro: data[i][8],
+          status: statusLinha || ''
         });
       }
 
@@ -3169,12 +3252,15 @@ function salvarMovimentacao(dados) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Movimentações');
-    
+
     if (!sheet) {
       return { success: false, error: 'Aba de movimentações não encontrada' };
     }
-    
+
+    var colunaStatus = garantirEstruturaMovimentacoes(sheet);
+
     // Buscar número do armário
+    var tipoArmarioNormalizado = normalizarTextoBasico(dados.tipoArmario);
     var tipoNormalizado = normalizarTextoBasico(dados.tipo);
     var numeroArmario = normalizarNumeroArmario(dados.numeroArmario);
     if (!numeroArmario) {
@@ -3211,20 +3297,76 @@ function salvarMovimentacao(dados) {
       dados.responsavel,
       dados.data,
       dados.hora,
-      registroMovimento
+      registroMovimento,
+      'ativo'
     ];
 
-    sheet.getRange(lastRow + 1, 1, 1, 9).setValues([novaLinha]);
+    sheet.getRange(lastRow + 1, 1, 1, colunaStatus).setValues([novaLinha]);
 
     registrarLog('MOVIMENTAÇÃO', `Movimentação registrada para armário ${numeroArmario}`);
 
-    limparCacheMovimentacoes(dados.armarioId, numeroArmario, tipoNormalizado);
+    limparCacheMovimentacoes(dados.armarioId, numeroArmario, tipoArmarioNormalizado || tipoNormalizado);
 
     return { success: true, message: 'Movimentação registrada com sucesso', id: novoId };
-    
+
   } catch (error) {
     registrarLog('ERRO', `Erro ao salvar movimentação: ${error.toString()}`);
     return { success: false, error: error.toString() };
+  }
+}
+
+function finalizarMovimentacoesArmario(armarioId, numeroArmario, tipo) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Movimentações');
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      return;
+    }
+
+    var colunaStatus = garantirEstruturaMovimentacoes(sheet);
+    var totalLinhas = sheet.getLastRow() - 1;
+    if (totalLinhas <= 0) {
+      return;
+    }
+
+    var idTexto = armarioId !== undefined && armarioId !== null ? armarioId.toString().trim() : '';
+    var numeroNormalizado = normalizarNumeroArmario(numeroArmario);
+    var largura = Math.max(colunaStatus, sheet.getLastColumn());
+    var dados = sheet.getRange(2, 1, totalLinhas, largura).getValues();
+    var statusValores = sheet.getRange(2, colunaStatus, totalLinhas, 1).getValues();
+    var houveAlteracao = false;
+
+    for (var i = 0; i < dados.length; i++) {
+      var linha = dados[i];
+      if (!linha) {
+        continue;
+      }
+      var idLinha = linha[1] !== undefined && linha[1] !== null ? linha[1].toString().trim() : '';
+      if (idTexto && idLinha !== idTexto) {
+        continue;
+      }
+      if (numeroNormalizado) {
+        var numeroLinha = linha[2] ? linha[2].toString().trim() : '';
+        if (normalizarNumeroArmario(numeroLinha) !== numeroNormalizado) {
+          continue;
+        }
+      }
+      var statusAtual = normalizarTextoBasico(statusValores[i][0] || linha[colunaStatus - 1]);
+      if (statusAtual === 'finalizado') {
+        continue;
+      }
+      statusValores[i][0] = 'finalizado';
+      houveAlteracao = true;
+    }
+
+    if (houveAlteracao) {
+      sheet.getRange(2, colunaStatus, totalLinhas, 1).setValues(statusValores);
+      limparCacheMovimentacoes(armarioId, numeroArmario, tipo);
+    }
+
+  } catch (error) {
+    registrarLog('AVISO_MOVIMENTACAO', 'Falha ao finalizar movimentações: ' + error.toString());
   }
 }
 
