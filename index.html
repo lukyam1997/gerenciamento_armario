@@ -4016,7 +4016,7 @@
         function iniciarLoadingBotao(botao) {
             if (!botao) return () => {};
             const inicio = Date.now();
-            const duracaoMinima = 300;
+            const duracaoMinima = 180;
             botao.classList.add('btn-loading');
             botao.disabled = true;
             return () => {
@@ -4048,8 +4048,8 @@
                     overlay.setAttribute('aria-hidden', 'true');
                 };
                 const decorrido = Date.now() - inicio;
-                if (decorrido < 250) {
-                    setTimeout(encerrar, 250 - decorrido);
+                if (decorrido < 150) {
+                    setTimeout(encerrar, 150 - decorrido);
                 } else {
                     encerrar();
                 }
@@ -6595,7 +6595,7 @@
                         break;
                 }
             };
-            const aguardarTransicao = (tempo = 320) => new Promise(resolve => setTimeout(resolve, tempo));
+            const aguardarTransicao = (tempo = 140) => new Promise(resolve => setTimeout(resolve, tempo));
 
             Swal.fire({
                 title: 'Concluindo a liberação do armário...',

@@ -1768,6 +1768,12 @@ function autenticarUsuario(dados) {
     }
 
     var senhaArmazenada = obterValorLinha(linhaUsuario, estrutura, 'senha', '');
+    if (senhaArmazenada !== null && senhaArmazenada !== undefined) {
+      senhaArmazenada = senhaArmazenada.toString().trim();
+    } else {
+      senhaArmazenada = '';
+    }
+
     if (senhaInformada !== senhaArmazenada) {
       return { success: false, error: 'Senha incorreta' };
     }
