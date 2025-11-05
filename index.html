@@ -3938,6 +3938,34 @@
             }
             return false;
         }
+        function sincronizarDadosArmariosEmSegundoPlano({
+            recarregarArmarios = true,
+            recarregarEstatisticas = true,
+            recarregarTabelas = true,
+            recarregarArmariosNasTabelas = true
+        } = {}) {
+            const tarefas = [];
+            if (recarregarArmarios) {
+                tarefas.push(carregarArmarios({ forcarAtualizacao: true }));
+            }
+            if (recarregarEstatisticas) {
+                tarefas.push(carregarEstatisticas());
+            }
+            Promise.allSettled(tarefas)
+                .then(() => {
+                    if (recarregarTabelas) {
+                        return carregarDadosTabelas({ recarregarArmarios: recarregarArmariosNasTabelas });
+                    }
+                    return null;
+                })
+                .catch(erro => {
+                    console.error('Erro na sincronização em segundo plano:', erro);
+                })
+                .finally(() => {
+                    atualizarResumoDashboardLocal();
+                    atualizarInterface();
+                });
+        }
         function aguardarProximoFrame() {
             return new Promise(resolve => {
                 if (typeof requestAnimationFrame === 'function') {
@@ -4600,16 +4628,17 @@
             return Boolean(atualizarArmarioLocal(id, atualizacoes));
         }
         // Carregar dados nas tabelas
-        async function carregarDadosTabelas() {
+        async function carregarDadosTabelas(opcoes = {}) {
+            const { recarregarArmarios = true } = opcoes;
             const unidadeFiltro = estado.unidadeAtual;
             try {
                 // Carregar dados específicos da página atual
                 switch(estado.paginaAtual) {
                     case 'visitantes':
-                        await carregarTabelaVisitantes(unidadeFiltro);
+                        await carregarTabelaVisitantes(unidadeFiltro, { recarregarArmarios });
                         break;
                     case 'acompanhantes':
-                        await carregarTabelaAcompanhantes(unidadeFiltro);
+                        await carregarTabelaAcompanhantes(unidadeFiltro, { recarregarArmarios });
                         break;
                     case 'historico-visitantes':
                         await carregarHistoricoVisitantes();
@@ -4618,7 +4647,7 @@
                         await carregarHistoricoAcompanhantes();
                         break;
                     case 'termo-responsabilidade':
-                        await carregarTabelaTermos();
+                        await carregarTabelaTermos({ recarregarArmarios });
                         break;
                     case 'cadastro-armarios':
                         await carregarCadastroArmarios(unidadeFiltro);
@@ -4638,10 +4667,13 @@
                 mostrarErro('Erro ao carregar dados');
             }
         }
-        async function carregarTabelaVisitantes(unidadeFiltro) {
+        async function carregarTabelaVisitantes(unidadeFiltro, opcoes = {}) {
+            const { recarregarArmarios = true } = opcoes;
             const tbodyVisitantes = document.querySelector('#tabela-visitantes tbody');
             if (!tbodyVisitantes) return;
-            await carregarArmarios();
+            if (recarregarArmarios || !estado.armariosCarregados) {
+                await carregarArmarios();
+            }
             tbodyVisitantes.innerHTML = '';
             const filtroNormalizado = normalizarTexto(unidadeFiltro);
             const armariosVisitantes = estado.armarios
@@ -4675,10 +4707,13 @@
                 tbodyVisitantes.appendChild(tr);
             });
         }
-        async function carregarTabelaAcompanhantes(unidadeFiltro) {
+        async function carregarTabelaAcompanhantes(unidadeFiltro, opcoes = {}) {
+            const { recarregarArmarios = true } = opcoes;
             const tbodyAcompanhantes = document.querySelector('#tabela-acompanhantes tbody');
             if (!tbodyAcompanhantes) return;
-            await carregarArmarios();
+            if (recarregarArmarios || !estado.armariosCarregados) {
+                await carregarArmarios();
+            }
             tbodyAcompanhantes.innerHTML = '';
             const filtroNormalizado = normalizarTexto(unidadeFiltro);
             const armariosAcompanhantes = estado.armarios
@@ -4776,14 +4811,17 @@
                 tbody.appendChild(tr);
             });
         }
-        async function carregarTabelaTermos() {
+        async function carregarTabelaTermos(opcoes = {}) {
+            const { recarregarArmarios = true } = opcoes;
             if (!elementos.tabelaTermosBody) return;
 
             const carregamentoId = ++estado.carregamentoTermosId;
             const tbody = elementos.tabelaTermosBody;
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:16px; color:#5b6b86;">Carregando termos...</td></tr>';
 
-            await carregarArmarios();
+            if (recarregarArmarios || !estado.armariosCarregados) {
+                await carregarArmarios();
+            }
             if (estado.carregamentoTermosId !== carregamentoId) return;
 
             if (!estado.armariosCarregados) {
@@ -5587,12 +5625,43 @@
                     if (resultado.success) {
                         fecharModalArmario();
 
-                        // Recarregar dados
-                        await carregarArmarios({ forcarAtualizacao: true });
-                        await carregarEstatisticas();
+                        let idParaAtualizacao = armarioChave;
+                        if (!idParaAtualizacao && idPlanilha) {
+                            const armarioEstado = estado.armarios.find(item => normalizarIdentificador(item.idPlanilha) === idPlanilha);
+                            if (armarioEstado) {
+                                idParaAtualizacao = armarioEstado.id;
+                            }
+                        }
+
+                        if (idParaAtualizacao) {
+                            const agora = new Date();
+                            const horaInicioLocal = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            const atualizacoesLocais = {
+                                status: 'em-uso',
+                                nomeVisitante: dados.nomeVisitante,
+                                nomePaciente: dados.nomePaciente,
+                                leito: dados.leito,
+                                volumes: volumesInformados,
+                                whatsapp: dados.whatsapp,
+                                horaInicio: horaInicioLocal,
+                                horaPrevista: dados.horaPrevista || '',
+                                dataRegistro: agora.toISOString(),
+                                tipo: tipo
+                            };
+                            const atualizado = atualizarArmarioLocal(idParaAtualizacao, atualizacoesLocais);
+                            if (!atualizado) {
+                                console.warn('Armário não encontrado no estado local para atualização imediata:', idParaAtualizacao);
+                            }
+                        }
+
+                        atualizarResumoDashboardLocal();
                         atualizarInterface();
-                        carregarDadosTabelas();
+                        carregarDadosTabelas({ recarregarArmarios: false }).catch(erro => {
+                            console.error('Erro ao atualizar tabelas localmente após cadastro:', erro);
+                        });
+
                         mostrarSucesso('Armário cadastrado com sucesso');
+                        sincronizarDadosArmariosEmSegundoPlano({ recarregarArmariosNasTabelas: true });
                     } else {
                         notificarErroPadrao(resultado);
                     }
@@ -5655,13 +5724,15 @@
 
             const resultado = await callGoogleScript('liberarArmario', payload);
             if (resultado.success) {
-                await carregarArmarios({ forcarAtualizacao: true });
-                await carregarEstatisticas();
                 garantirArmarioLiberadoLocal(id);
                 atualizarResumoDashboardLocal();
                 atualizarInterface();
-                carregarDadosTabelas();
+                carregarDadosTabelas({ recarregarArmarios: false }).catch(erro => {
+                    console.error('Erro ao atualizar tabelas localmente após liberação:', erro);
+                });
+
                 mostrarSucesso('Armário liberado com sucesso');
+                sincronizarDadosArmariosEmSegundoPlano({ recarregarArmariosNasTabelas: true });
                 return;
             }
 
