@@ -1351,6 +1351,13 @@
             cursor: crosshair;
             touch-action: none;
         }
+        .final-signature-dialog .wizard-signature-area {
+            padding: 16px;
+        }
+        .final-signature-dialog .wizard-signature-canvas {
+            min-height: 220px;
+            height: 220px;
+        }
         .wizard-signature-actions {
             display: flex;
             justify-content: flex-end;
@@ -1734,6 +1741,10 @@
             border-bottom-color: transparent;
             animation: spin 0.6s linear infinite;
             display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
         .liberacao-step.is-active .liberacao-step-spinner {
             display: block;
@@ -6382,7 +6393,7 @@
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
             const largura = Math.max(rect.width || 0, 320);
-            const altura = Math.max(rect.height || 0, 160);
+            const altura = Math.max(rect.height || 0, 220);
             canvas.width = largura;
             canvas.height = altura;
             canvas.style.width = `${largura}px`;
@@ -6962,7 +6973,7 @@
                         break;
                 }
             };
-            const aguardarTransicao = (tempo = 140) => new Promise(resolve => setTimeout(resolve, tempo));
+            const aguardarTransicao = (tempo = 60) => new Promise(resolve => setTimeout(resolve, tempo));
 
             Swal.fire({
                 title: 'Concluindo a liberação do armário...',
