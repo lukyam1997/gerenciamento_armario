@@ -1102,33 +1102,45 @@ function cadastrarArmario(armarioData) {
 
     var estrutura = obterEstruturaPlanilha(sheet);
     var totalColunas = estrutura.ultimaColuna || (sheetName === 'Visitantes' ? 13 : 12);
-    var data = sheet.getRange(2, 1, totalLinhas - 1, totalColunas).getValues();
     var linhaPlanilha = -1;
     var linhaAtual = null;
     var idParametroBruto = armarioData.idPlanilha !== undefined && armarioData.idPlanilha !== ''
       ? armarioData.idPlanilha
       : armarioData.id;
-    var idNumerico = Number(idParametroBruto);
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
     var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
     var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
 
-    for (var i = 0; i < data.length; i++) {
-      if (data[i][idIndex] == idNumerico) {
-        linhaPlanilha = i + 2;
-        linhaAtual = data[i].slice();
-        break;
+    if (totalLinhas > 1 && idParametroBruto !== undefined && idParametroBruto !== null && idParametroBruto !== '') {
+      var idTexto = idParametroBruto.toString().trim();
+      if (idTexto) {
+        var intervaloId = sheet.getRange(2, idIndex + 1, totalLinhas - 1, 1);
+        var idFinder = intervaloId.createTextFinder(idTexto).matchEntireCell(true);
+        var idEncontrado = idFinder ? idFinder.findNext() : null;
+        if (idEncontrado) {
+          linhaPlanilha = idEncontrado.getRow();
+          linhaAtual = sheet.getRange(linhaPlanilha, 1, 1, totalColunas).getValues()[0];
+        }
       }
     }
 
-    if ((linhaPlanilha === -1 || !linhaAtual) && armarioData.numero) {
-      var numeroInformado = String(armarioData.numero);
-      for (var j = 0; j < data.length; j++) {
-        var statusLinha = normalizarTextoBasico(data[j][statusIndex]);
-        if (data[j][numeroIndex] === numeroInformado && statusLinha === 'livre') {
-          linhaPlanilha = j + 2;
-          linhaAtual = data[j].slice();
-          break;
+    if ((linhaPlanilha === -1 || !linhaAtual) && armarioData.numero && totalLinhas > 1) {
+      var numeroInformado = armarioData.numero.toString().trim();
+      if (numeroInformado) {
+        var intervaloNumero = sheet.getRange(2, numeroIndex + 1, totalLinhas - 1, 1);
+        var numeroFinder = intervaloNumero.createTextFinder(numeroInformado).matchEntireCell(true);
+        var correspondencias = numeroFinder ? numeroFinder.findAll() : [];
+        for (var j = 0; j < correspondencias.length; j++) {
+          var linhaCandidata = correspondencias[j].getRow();
+          var valoresLinha = sheet.getRange(linhaCandidata, 1, 1, totalColunas).getValues()[0];
+          var statusLinha = normalizarTextoBasico(
+            obterValorLinha(valoresLinha, estrutura, 'status', valoresLinha[statusIndex])
+          );
+          if (statusLinha === 'livre') {
+            linhaPlanilha = linhaCandidata;
+            linhaAtual = valoresLinha;
+            break;
+          }
         }
       }
     }
@@ -1179,7 +1191,11 @@ function cadastrarArmario(armarioData) {
     sheet.getRange(linhaPlanilha, 1, 1, totalColunas).setValues([novaLinha]);
 
     var historicoLastRow = historicoSheet.getLastRow();
-    var historicoId = historicoLastRow > 1 ? Math.max(...historicoSheet.getRange(2, 1, historicoLastRow - 1, 1).getValues().flat()) + 1 : 1;
+    var ultimoHistoricoId = historicoLastRow > 1
+      ? Number(historicoSheet.getRange(historicoLastRow, 1).getValue()) || 0
+      : 0;
+    var historicoId = ultimoHistoricoId + 1;
+    var proximaLinhaHistorico = historicoLastRow + 1;
 
     var dataHistorico = dataHoraAtual.dataHoraIso;
 
@@ -1199,7 +1215,7 @@ function cadastrarArmario(armarioData) {
       whatsapp
     ];
 
-    historicoSheet.getRange(historicoLastRow + 1, 1, 1, historicoLinha.length).setValues([historicoLinha]);
+    historicoSheet.getRange(proximaLinhaHistorico, 1, 1, historicoLinha.length).setValues([historicoLinha]);
 
     registrarLog('CADASTRO', `Armário ${numeroArmario} cadastrado para ${armarioData.nomeVisitante}`);
 
@@ -1244,51 +1260,38 @@ function liberarArmario(id, tipo, numero) {
       return { success: false, error: 'Nenhum armário cadastrado' };
     }
 
-    var data = sheet.getRange(2, 1, totalLinhas - 1, totalColunas).getValues();
-    var armarioIndex = -1;
-    var armarioData = null;
     var idIndex = obterIndiceColuna(estrutura, 'id', 0);
     var statusIndex = obterIndiceColuna(estrutura, 'status', 2);
     var numeroIndex = obterIndiceColuna(estrutura, 'numero', 1);
+    var linhaPlanilha = -1;
+    var armarioData = null;
 
-    for (var idx = 0; idx < data.length; idx++) {
-      var row = data[idx];
-      var idLinha = row[idIndex];
-      var idLinhaTexto = idLinha !== null && idLinha !== undefined ? idLinha.toString().trim() : '';
-
-      if (idComparacao && idLinhaTexto !== idComparacao) {
-        continue;
-      }
-
-      if (numeroInformado) {
-        var numeroLinha = obterValorLinha(row, estrutura, 'numero', row[numeroIndex]);
-        if (numeroInformado !== normalizarNumeroArmario(numeroLinha)) {
-          continue;
-        }
-      }
-
-      armarioIndex = idx;
-      armarioData = row.slice();
-      break;
-    }
-
-    if (armarioIndex === -1 && numeroInformado) {
-      for (var indice = 0; indice < data.length; indice++) {
-        var linhaAtual = data[indice];
-        var numeroLinhaBusca = obterValorLinha(linhaAtual, estrutura, 'numero', linhaAtual[numeroIndex]);
-        if (numeroInformado === normalizarNumeroArmario(numeroLinhaBusca)) {
-          armarioIndex = indice;
-          armarioData = linhaAtual.slice();
-          break;
-        }
+    if (totalLinhas > 1 && idComparacao) {
+      var intervaloId = sheet.getRange(2, idIndex + 1, totalLinhas - 1, 1);
+      var idFinder = intervaloId.createTextFinder(idComparacao).matchEntireCell(true);
+      var idEncontrado = idFinder ? idFinder.findNext() : null;
+      if (idEncontrado) {
+        linhaPlanilha = idEncontrado.getRow();
+        armarioData = sheet.getRange(linhaPlanilha, 1, 1, totalColunas).getValues()[0];
       }
     }
 
-    if (armarioIndex === -1 || !armarioData) {
+    if ((linhaPlanilha === -1 || !armarioData) && numeroInformado && totalLinhas > 1) {
+      var intervaloNumero = sheet.getRange(2, numeroIndex + 1, totalLinhas - 1, 1);
+      var numeroFinder = intervaloNumero.createTextFinder(numeroInformado).matchEntireCell(true);
+      var correspondencias = numeroFinder ? numeroFinder.findAll() : [];
+      for (var indice = 0; indice < correspondencias.length; indice++) {
+        var linhaCandidata = correspondencias[indice].getRow();
+        var valoresLinha = sheet.getRange(linhaCandidata, 1, 1, totalColunas).getValues()[0];
+        linhaPlanilha = linhaCandidata;
+        armarioData = valoresLinha;
+        break;
+      }
+    }
+
+    if (linhaPlanilha === -1 || !armarioData) {
       return { success: false, error: 'Armário não encontrado' };
     }
-
-    var linha = armarioIndex + 2;
 
     var statusPadrao = (statusIndex !== null && statusIndex !== undefined && statusIndex < armarioData.length)
       ? armarioData[statusIndex]
@@ -1323,32 +1326,30 @@ function liberarArmario(id, tipo, numero) {
     definirValorLinha(novaLinha, estrutura, 'unidade', unidadeAtual);
     definirValorLinha(novaLinha, estrutura, 'termo aplicado', false);
 
-    sheet.getRange(linha, 1, 1, totalColunas).setValues([novaLinha]);
+    sheet.getRange(linhaPlanilha, 1, 1, totalColunas).setValues([novaLinha]);
 
     // Atualizar histórico - encontrar a entrada mais recente deste armário
     var historicoLastRow = historicoSheet.getLastRow();
-    var historicoData = historicoLastRow > 1
-      ? historicoSheet.getRange(2, 1, historicoLastRow - 1, 13).getValues()
-      : [];
-    var historicoIndex = -1;
     var numeroArmario = obterValorLinha(armarioData, estrutura, 'numero', armarioData[numeroIndex]);
     numeroArmario = numeroArmario ? numeroArmario.toString().trim() : '';
     if (!numeroArmario) {
       numeroArmario = numeroInformado;
     }
 
-    for (var i = historicoData.length - 1; i >= 0; i--) {
-      if (historicoData[i][2] === numeroArmario && historicoData[i][9] === 'EM USO') {
-        historicoIndex = i;
-        break;
+    if (historicoLastRow > 1 && numeroArmario) {
+      var intervaloHistoricoNumeros = historicoSheet.getRange(2, 3, historicoLastRow - 1, 1);
+      var historicoFinder = intervaloHistoricoNumeros.createTextFinder(numeroArmario).matchEntireCell(true);
+      var ocorrencias = historicoFinder ? historicoFinder.findAll() : [];
+      for (var i = ocorrencias.length - 1; i >= 0; i--) {
+        var linhaHistorico = ocorrencias[i].getRow();
+        var statusRegistro = historicoSheet.getRange(linhaHistorico, 10).getValue();
+        if (statusRegistro === 'EM USO') {
+          var horaFim = dataHoraAtual.horaCurta;
+          historicoSheet.getRange(linhaHistorico, 9).setValue(horaFim);
+          historicoSheet.getRange(linhaHistorico, 10).setValue('FINALIZADO');
+          break;
+        }
       }
-    }
-
-    if (historicoIndex !== -1) {
-      var historicoLinha = historicoIndex + 2;
-      var horaFim = dataHoraAtual.horaCurta;
-      historicoSheet.getRange(historicoLinha, 9).setValue(horaFim); // Hora fim
-      historicoSheet.getRange(historicoLinha, 10).setValue('FINALIZADO'); // Status
     }
 
     registrarLog('LIBERAÇÃO', `Armário ${numeroArmario} liberado`);
